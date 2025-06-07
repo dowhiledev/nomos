@@ -1,0 +1,23 @@
+# Getting Started
+
+## Installation
+
+```bash
+pip install nomos
+```
+
+For CLI support and LLM providers you can install extras:
+
+```bash
+pip install nomos[cli,openai,mistralai,gemini,ollama,huggingface]
+```
+
+## Basic Usage
+
+Create a configuration file or define your steps in Python and run:
+
+```bash
+nomos run --config config.agent.yaml --tools tools.py
+```
+
+See the [examples](../examples) directory for more advanced configurations.

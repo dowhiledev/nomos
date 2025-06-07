@@ -34,6 +34,8 @@
   <a href="#usage"><strong>Explore examples »</strong></a>
   ·
   <a href="https://nomos-builder.vercel.app"><strong>🎨 Try Visual Builder »</strong></a>
+  ·
+  <a href="docs-site"><strong>📚 Documentation »</strong></a>
   <br />
   <br />
   <a href="https://github.com/dowhiledev/nomos/issues/new?assignees=&labels=bug&template=01_BUG_REPORT.md&title=bug%3A+">Report a Bug</a>
@@ -176,6 +178,10 @@ npm run docker:build-and-run
 ```
 
 See [`tools/visual-builder/README.md`](tools/visual-builder/README.md) for detailed setup instructions.
+
+## Documentation
+
+The full documentation is available in the [docs-site](docs-site) folder. Run `npm install` and `npm run dev` inside `docs-site` to start the Nextra documentation locally.
 
 ## Getting Started
 

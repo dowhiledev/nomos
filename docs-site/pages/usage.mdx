@@ -1,0 +1,24 @@
+# Usage
+
+Nomos supports no-code to full-code development.
+
+## CLI
+
+```bash
+nomos init --directory ./my-agent --name chatbot --template basic
+nomos run --config config.agent.yaml --tools tools.py
+nomos serve --config config.agent.yaml --tools tools.py
+```
+
+## Python API
+
+```python
+from nomos import *
+
+steps = [
+    Step(step_id='start', description='Greet user'),
+    Step(step_id='end', description='Say goodbye')
+]
+
+agent = Nomos(name='demo', steps=steps, start_step_id='start')
+```

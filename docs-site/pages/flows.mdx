@@ -1,0 +1,17 @@
+# Flow Management
+
+Flows group related steps with shared memory and context. They allow complex workflows with long running conversations.
+
+```yaml
+flows:
+  - flow_id: take_order
+    enters: [take_order]
+    exits: [finalize_order, end]
+    components:
+      memory:
+        llm:
+          provider: openai
+          model: gpt-4o-mini
+```
+
+Each flow can maintain context, summarize when exiting and transfer knowledge between flows.

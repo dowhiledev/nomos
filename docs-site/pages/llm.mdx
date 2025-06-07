@@ -1,0 +1,17 @@
+# LLM Support
+
+Nomos works with multiple LLM providers.
+
+```python
+from nomos.llms import OpenAI, Mistral, Gemini, Ollama, HuggingFace
+
+llm = OpenAI(model='gpt-4o-mini')
+```
+
+You can also configure the provider in YAML:
+
+```yaml
+llm:
+  provider: openai
+  model: gpt-4o-mini
+```

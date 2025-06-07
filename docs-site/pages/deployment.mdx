@@ -1,0 +1,16 @@
+# Deployment
+
+Nomos ships with a Docker base image for easy deployment.
+
+```dockerfile
+FROM chandralegend/nomos-base:latest
+COPY config.agent.yaml /app/config.agent.yaml
+COPY tools.py /app/src/tools/
+```
+
+Build and run:
+
+```bash
+docker build -t my-nomos-agent .
+docker run -e OPENAI_API_KEY=your-key -p 8000:8000 my-nomos-agent
+```
