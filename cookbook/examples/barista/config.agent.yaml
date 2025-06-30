@@ -81,7 +81,7 @@ flows:
           provider: openai
           model: gpt-4o-mini
         retriever:
-          method: bm25
+          method: embedding
           kwargs:
             k1: 5
     metadata:

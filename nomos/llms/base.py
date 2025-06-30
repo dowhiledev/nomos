@@ -27,6 +27,7 @@ class LLMBase:
     """Abstract base class for LLM integrations in Nomos."""
 
     __provider__: str = "base"
+    _decision_model_cache: Dict[str, Type[BaseModel]] = {}
 
     def __init__(self) -> None:
         """Initialize the LLMBase class."""
@@ -247,6 +248,11 @@ class LLMBase:
         :param tool_models: List of Pydantic models for tool arguments.
         :return: A dynamically created Pydantic BaseModel for the decision.
         """
+        cache_key = current_step.step_id
+        cached = LLMBase._decision_model_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         available_step_ids = current_step.get_available_routes()
         tool_ids = [tool.name for tool in current_step_tools]
         tool_models = [tool.get_args_model() for tool in current_step_tools]
@@ -326,10 +332,12 @@ class LLMBase:
             len(params) > 2
         ), "Something went wrong, Please check the step configuration."
 
-        return create_base_model(
+        model = create_base_model(
             "Decision",
             params,
         )
+        LLMBase._decision_model_cache[cache_key] = model
+        return model
 
     @staticmethod
     def _create_decision_from_output(

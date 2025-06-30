@@ -166,7 +166,7 @@ ordering_flow_config = FlowConfig(
                 "model": "gpt-4o-mini",
             },
             "retriever": {
-                "method": "bm25",
+                "method": "embedding",
             },
         }
     },

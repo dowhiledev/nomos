@@ -75,7 +75,7 @@ flows:
           provider: openai
           model: gpt-4o-mini
         retriever:
-          method: bm25
+          method: embedding
           kwargs:
             k: 5
     metadata:
@@ -94,7 +94,7 @@ flows:
           provider: openai
           model: gpt-4o-mini
         retriever:
-          method: bm25
+          method: embedding
 ```
 
 ## Flow Memory and Context
@@ -133,7 +133,7 @@ flows:
           provider: openai
           model: gpt-4o-mini
         retriever:
-          method: bm25
+          method: embedding
           kwargs:
             k: 5
 ```

@@ -51,7 +51,7 @@ flows = [
         components={
             "memory": {
                 "llm": {"provider": "openai", "model": "gpt-4o-mini"},
-                "retriever": {"method": "bm25", "kwargs": {"k": 3}}
+                "retriever": {"method": "embedding", "kwargs": {"k": 3}}
             }
         }
     )
