@@ -130,7 +130,7 @@ class AzureOpenAI(OpenAI):
             from openai import AzureOpenAI
         except ImportError:
             raise ImportError(
-                "Azure OpenAI package is not installed. Please install it using 'pip install nomos[openai]."
+                "Azure OpenAI package is not installed. Please install it using 'pip install nomos[openai]'."
             )
         self.model = model
         self.embedding_model = embedding_model or "text-embedding-3-small"
