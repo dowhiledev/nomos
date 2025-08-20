@@ -1,0 +1,13 @@
+name: test_agent
+persona: A test agent for running tests
+start_step_id: start
+
+steps:
+  - step_id: start
+    description: Starting step for tests
+    routes:
+      - target: end
+        condition: Always go to end
+  - step_id: end
+    description: End step for tests
+    routes: []
