@@ -140,7 +140,12 @@ class AzureOpenAI(OpenAI):
 
         assert api_key is not None, "AZURE_OPENAI_API_KEY environment variable must be set."
         assert api_version is not None, "OPENAI_API_VERSION environment variable must be set."
-        assert azure_endpoint is not None, "AZURE_OPENAI_ENDPOINT environment variable must be set."
+        if api_key is None:
+            raise ValueError("AZURE_OPENAI_API_KEY environment variable must be set.")
+        if api_version is None:
+            raise ValueError("OPENAI_API_VERSION environment variable must be set.")
+        if azure_endpoint is None:
+            raise ValueError("AZURE_OPENAI_ENDPOINT environment variable must be set.")
 
         self.client = AzureOpenAI(
             api_key=api_key, azure_endpoint=azure_endpoint, api_version=api_version
