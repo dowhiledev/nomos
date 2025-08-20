@@ -14,7 +14,7 @@ from .state_machine import StateMachine
 from .testing import smart_assert
 from .testing.e2e import Scenario, ScenarioRunner
 
-__version__ = "0.3.6"
+__version__ = "0.3.7"
 __author__ = "DoWhile"
 
 __all__ = [
