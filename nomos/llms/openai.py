@@ -1,5 +1,6 @@
 """OpenAI LLM integration for Nomos."""
 
+import os
 from typing import List, Optional
 
 from pydantic import BaseModel
@@ -110,4 +111,40 @@ class OpenAI(LLMBase):
         return embs
 
 
-__all__ = ["OpenAI"]
+class AzureOpenAI(OpenAI):
+    """Azure OpenAI Chat LLM integration for Nomos."""
+
+    __provider__: str = "azure"
+
+    def __init__(
+        self, model: str = "gpt-4o-mini", embedding_model: Optional[str] = None, **kwargs
+    ) -> None:
+        """
+        Initialize the AzureOpenAIChatLLM.
+
+        :param model: Model name to use (default: gpt-4o-mini).
+        :param embedding_model: Model name for embeddings (default: text-embedding-3-small).
+        :param kwargs: Additional parameters for Azure OpenAI API.
+        """
+        try:
+            from openai import AzureOpenAI
+        except ImportError:
+            raise ImportError(
+                "Azure OpenAI package is not installed. Please install it using 'pip install nomos[openai]."
+            )
+        self.model = model
+        self.embedding_model = embedding_model or "text-embedding-3-small"
+        api_key = os.environ.get("AZURE_OPENAI_API_KEY")
+        api_version = os.environ.get("OPENAI_API_VERSION")
+        azure_endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT")
+
+        assert api_key is not None, "AZURE_OPENAI_API_KEY environment variable must be set."
+        assert api_version is not None, "OPENAI_API_VERSION environment variable must be set."
+        assert azure_endpoint is not None, "AZURE_OPENAI_ENDPOINT environment variable must be set."
+
+        self.client = AzureOpenAI(
+            api_key=api_key, azure_endpoint=azure_endpoint, api_version=api_version
+        )
+
+
+__all__ = ["OpenAI", "AzureOpenAI"]

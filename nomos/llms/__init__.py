@@ -12,9 +12,9 @@ from .groq import Groq
 from .huggingface import HuggingFace
 from .mistral import Mistral
 from .ollama import Ollama
-from .openai import OpenAI
+from .openai import AzureOpenAI, OpenAI
 
-LLMS: list = [OpenAI, Mistral, Gemini, Ollama, HuggingFace, Anthropic, Groq, Cohere]
+LLMS: list = [OpenAI, AzureOpenAI, Mistral, Gemini, Ollama, HuggingFace, Anthropic, Groq, Cohere]
 
 
 class LLMConfig(BaseModel):
@@ -28,7 +28,15 @@ class LLMConfig(BaseModel):
     """
 
     provider: Literal[
-        "openai", "mistral", "google", "ollama", "huggingface", "anthropic", "groq", "cohere"
+        "azure",
+        "openai",
+        "mistral",
+        "google",
+        "ollama",
+        "huggingface",
+        "anthropic",
+        "groq",
+        "cohere",
     ]
     model: str
     embedding_model: Optional[str] = None
@@ -54,6 +62,7 @@ __all__ = [
     "LLMConfig",
     "LLMBase",
     "OpenAI",
+    "AzureOpenAI",
     "Cohere",
     "Gemini",
     "Mistral",

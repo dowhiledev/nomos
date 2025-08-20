@@ -21,6 +21,10 @@ LLM_CHOICES = {
         "provider": "openai",
         "model": "gpt-4o-mini",
     },
+    "AzureOpenAI": {
+        "provider": "azure",
+        "model": "gpt-4o-mini",
+    },
     "Mistral": {
         "provider": "mistral",
         "model": "ministral-8b-latest",

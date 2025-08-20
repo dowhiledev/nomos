@@ -17,7 +17,7 @@ steps:
       - target: gather_comparable_data
         condition: If the user wants to create a Comparative Market Analysis (CMA) report
 
-  
+
   - step_id: gather_comparable_data
     description: |
       Gather data on comparable properties in the area to help the agent understand the market.
@@ -84,7 +84,7 @@ steps:
 llm:
   provider: openai
   model: gpt-4o-mini
-  
+
 tools:
   tool_files:
     - repliers.py
