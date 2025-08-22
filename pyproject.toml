@@ -16,6 +16,7 @@ dependencies = [
     "greenlet>=3.2.3",
     "numpy>=2.2.6",
     "httpx>=0.28.1",
+    "requests>=2.25.0",
 ]
 
 [tool.uv]
