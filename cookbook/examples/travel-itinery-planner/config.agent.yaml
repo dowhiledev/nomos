@@ -4,6 +4,9 @@ persona: |
   You consider local attractions, dining, transportation, and rest time. You are friendly, organized, and attentive to detail.
 start_step_id: get_trip_details
 
+schemas:
+  itinerary: 'itinerary_schema.json'
+
 steps:
   - step_id: get_trip_details
     description: |
@@ -42,52 +45,7 @@ steps:
         condition: User approves basic outline with minor changes or without changes
       - target: plan_basic_itinerary
         condition: User wants substantial revisions to the basic plan
-    answer_model:
-      days:
-        description: |
-          A list of days in the itinerary, each containing a list of activities and their details.
-        is_list: true
-        type:
-          name: DayPlan
-          params:
-            day_number:
-              type: int
-              description: The number of the day in the itinerary.
-            activities:
-              description: |
-                A list of activities planned for the day, each with its details.
-              is_list: true
-              type:
-                name: Activity
-                params:
-                  name:
-                    type: str
-                    description: The name of the activity.
-                  location:
-                    type: str
-                    description: The location of the activity.
-                  details:
-                    type: str
-                    description: Additional details about the activity (e.g., ticket prices, opening hours).
-                  transportation:
-                    type: str
-                    description: Transportation details (e.g., how to get there, travel time).
-                  source:
-                    type: str
-                    description: The source of the information (e.g., link to a website, article).
-            total_estimated_cost:
-              type: float
-              description: The total estimated cost for the day, including activities, dining, and transportation.
-            summary:
-              type: str
-              description: A brief summary of the day's plan.
-      conclusion:
-        type: str
-        description: A summary of the entire itinerary, including key highlights and recommendations.
-      ending_statement:
-        type: str
-        description: |
-          A closing statement to the user, asking whether they are satisfied with the plan or if they want to make changes.
+    answer_model: itinerary
     quick_suggestions: true
 
   - step_id: plan_day_details

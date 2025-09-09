@@ -49,6 +49,7 @@ NOMOS helps developers build sophisticated AI agents through structured workflow
 | Use Case | Description |
 |----------|-------------|
 | **Multi-step Workflows** | Complex, stateful interactions with specialized tools and intelligent routing |
+| **Structured Data** | Define reusable schemas for consistent, validated responses across agents |
 | **Rapid Prototyping** | No-code Playground → YAML config → Full Python implementation |
 | **Tool Integration** | Python functions, CrewAI, LangChain tools, External APIs with auto-documentation |
 | **Production Deployment** | Built-in session management, error handling, and monitoring |
@@ -78,6 +79,7 @@ NOMOS helps developers build sophisticated AI agents through structured workflow
 | | External API Tools | Use any REST API with ease (No wrapping needed.) |
 | **LLM Support** | Multiple Providers | OpenAI, Mistral, Gemini, Ollama, and HuggingFace |
 | | Structured Responses | Step-level answer models for JSON/object responses |
+| | External Schemas | Define reusable schemas in JSON or Python files |
 | | Persona-driven | Consistent, branded agent responses |
 | | Decision Examples | Retrieve relevant examples to guide step decisions |
 | **Production Ready** | Session Management | Redis/PostgreSQL storage for conversation persistence |
