@@ -256,7 +256,9 @@ class AgentConfig(BaseSettings):
     embedding_model: Optional[LLMConfig] = None  # Optional embedding model configuration
     memory: Optional[MemoryConfig] = None  # Optional memory configuration
     flows: Optional[List[FlowConfig]] = None  # Optional flow configurations
-    schemas: Optional[Dict[str, str]] = None  # Optional schema definitions mapping names to file paths
+    schemas: Optional[Dict[str, str]] = (
+        None  # Optional schema definitions mapping names to file paths
+    )
 
     server: ServerConfig = ServerConfig()  # Configuration for the FastAPI server
     tools: ToolsConfig = ToolsConfig()  # Configuration for tools
@@ -297,6 +299,7 @@ class AgentConfig(BaseSettings):
         # Load schemas if defined
         if config.schemas:
             from .utils.schema_loader import schema_registry
+
             base_path = os.path.dirname(file_path)
             for schema_name, schema_path in config.schemas.items():
                 schema_registry.load_schema(schema_name, schema_path, base_path)

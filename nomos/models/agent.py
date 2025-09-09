@@ -198,23 +198,24 @@ class Step(BaseModel):
         elif isinstance(self.answer_model, str):
             # Handle schema reference like "schema_name" or "schema_name.model_name"
             from ..utils.schema_loader import schema_registry
-            parts = self.answer_model.split('.')
+
+            parts = self.answer_model.split(".")
             if len(parts) == 1:
                 # Just schema name, use the first available model or try case-insensitive match
                 schema_name = parts[0]
                 schema_models = schema_registry._schemas.get(schema_name, {})
                 if not schema_models:
                     raise ValueError(f"Step '{self.step_id}': Schema '{schema_name}' not found")
-                
+
                 # Try exact match first
                 if schema_name in schema_models:
                     return schema_models[schema_name]
-                
+
                 # Try case-insensitive match
                 for model_name, model in schema_models.items():
                     if model_name.lower() == schema_name.lower():
                         return model
-                
+
                 # Use the first available model
                 return next(iter(schema_models.values()))
             elif len(parts) == 2:
