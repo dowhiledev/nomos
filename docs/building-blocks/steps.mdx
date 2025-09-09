@@ -159,6 +159,310 @@ Steps can override certain configurations for optimal usage:
     llm: coding
 ```
 
+## Answer Models and Structured Responses
+
+### What Are Answer Models?
+
+Answer models define the expected structure and format of your agent's responses. They ensure consistent, parseable output that can be easily processed by downstream systems or validated for correctness.
+
+<Info>
+**Why Use Answer Models?**
+
+Answer models provide type safety, validation, and structured data extraction from your agent's responses. They're especially valuable for:
+- API integrations
+- Data processing workflows
+- Multi-step processes requiring consistent data formats
+- Quality assurance and testing
+</Info>
+
+### Inline Answer Models
+
+Define simple answer models directly in your step configuration:
+
+```yaml
+- step_id: collect_user_info
+  description: |
+    Ask for user's name and email address.
+  answer_model:
+    name:
+      type: str
+      description: User's full name
+    email:
+      type: str
+      description: User's email address
+    age:
+      type: int
+      description: User's age in years
+      optional: true
+```
+
+### External Schema Files
+
+For complex or reusable models, define schemas in separate files:
+
+```yaml
+# config.agent.yaml
+name: my_agent
+
+schemas:
+  user_profile: 'schemas/user_profile.json'
+  order_schema: 'schemas/order.py'
+
+steps:
+  - step_id: collect_profile
+    description: Collect user profile information
+    answer_model: user_profile  # References external schema
+
+  - step_id: process_order
+    description: Process customer order
+    answer_model: order_schema.Order  # Specific model from Python file
+```
+
+#### JSON Schema Format
+
+Create `schemas/user_profile.json`:
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "User's full name"
+    },
+    "email": {
+      "type": "string",
+      "description": "User's email address",
+      "format": "email"
+    },
+    "age": {
+      "type": "integer",
+      "description": "User's age in years",
+      "minimum": 0,
+      "maximum": 150
+    },
+    "preferences": {
+      "type": "object",
+      "properties": {
+        "theme": {
+          "type": "string",
+          "enum": ["light", "dark", "auto"]
+        },
+        "notifications": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "required": ["name", "email"]
+}
+```
+
+#### Python Schema Format
+
+Create `schemas/order.py`:
+
+```python
+from pydantic import BaseModel, EmailStr
+from typing import List, Optional
+from enum import Enum
+
+class OrderStatus(str, Enum):
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    PROCESSING = "processing"
+    SHIPPED = "shipped"
+    DELIVERED = "delivered"
+
+class OrderItem(BaseModel):
+    product_id: str
+    name: str
+    quantity: int
+    price: float
+    description: Optional[str] = None
+
+class ShippingAddress(BaseModel):
+    street: str
+    city: str
+    state: str
+    zip_code: str
+    country: str = "US"
+
+class Order(BaseModel):
+    order_id: str
+    customer_email: EmailStr
+    items: List[OrderItem]
+    shipping_address: ShippingAddress
+    status: OrderStatus = OrderStatus.PENDING
+    total_amount: float
+    created_at: str
+    notes: Optional[str] = None
+
+    def calculate_total(self) -> float:
+        """Calculate total from items"""
+        return sum(item.price * item.quantity for item in self.items)
+```
+
+### Schema Referencing
+
+Reference schemas in different ways:
+
+```yaml
+# Reference main model from schema
+answer_model: user_profile
+
+# Reference specific model from Python schema
+answer_model: order_schema.Order
+
+# Reference nested model
+answer_model: order_schema.OrderItem
+```
+
+### Benefits of External Schemas
+
+<CardGroup cols={2}>
+  <Card title="Reusability" icon="recycle" iconType="solid">
+    Use the same schema across multiple agents and steps
+  </Card>
+  <Card title="Maintainability" icon="wrench" iconType="solid">
+    Update schemas without touching agent configuration
+  </Card>
+  <Card title="Type Safety" icon="shield" iconType="solid">
+    Full Pydantic validation with rich error messages
+  </Card>
+  <Card title="Version Control" icon="git-branch" iconType="solid">
+    Track schema changes separately from agent logic
+  </Card>
+  <Card title="IDE Support" icon="code" iconType="solid">
+    Better autocomplete and validation in Python schemas
+  </Card>
+  <Card title="Documentation" icon="book" iconType="solid">
+    Self-documenting schemas with descriptions and examples
+  </Card>
+</CardGroup>
+
+### Advanced Schema Features
+
+#### Nested Models and References
+
+```python
+# schemas/complex_order.py
+from pydantic import BaseModel
+from typing import List
+from .user_profile import UserProfile  # Reference other schemas
+
+class OrderSummary(BaseModel):
+    order_id: str
+    customer: UserProfile  # Nested reference
+    items_count: int
+    total: float
+
+class OrderDetails(OrderSummary):
+    items: List[OrderItem]
+    shipping_info: ShippingAddress
+    tracking_number: Optional[str] = None
+```
+
+#### Validation and Constraints
+
+```python
+# schemas/validated_user.py
+from pydantic import BaseModel, Field, validator
+from typing import Optional
+
+class ValidatedUser(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    email: str = Field(..., regex=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+    age: Optional[int] = Field(None, ge=0, le=150)
+
+    @validator('username')
+    def username_alphanumeric(cls, v):
+        if not v.replace('_', '').replace('-', '').isalnum():
+            raise ValueError('Username must be alphanumeric with underscores or hyphens')
+        return v
+```
+
+### Best Practices for Answer Models
+
+#### 1. **Start Simple**
+
+<Card title="Progressive Enhancement" icon="arrow-up">
+Begin with basic models and add complexity as needed
+</Card>
+
+```yaml
+# Start simple
+answer_model:
+  result: str
+  success: bool
+
+# Add complexity later
+answer_model:
+  result: str
+  success: bool
+  data:
+    type: object
+    properties:
+      items: {type: array}
+      metadata: {type: object}
+```
+
+#### 2. **Use Descriptive Field Names**
+
+<Card title="Self-Documenting" icon="file-text">
+Field names should clearly indicate their purpose
+</Card>
+
+```yaml
+# Good: Descriptive names
+answer_model:
+  customer_full_name: str
+  order_total_amount: float
+  estimated_delivery_date: str
+
+# Avoid: Generic names
+# answer_model:
+#   name: str
+#   total: float
+#   date: str
+```
+
+#### 3. **Include Validation Rules**
+
+<Card title="Data Quality" icon="check-circle">
+Add constraints to ensure data quality
+</Card>
+
+```yaml
+answer_model:
+  email:
+    type: str
+    description: Valid email address
+    pattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
+  age:
+    type: int
+    description: Age in years
+    minimum: 0
+    maximum: 150
+```
+
+#### 4. **Document Complex Schemas**
+
+<Card title="Future Maintenance" icon="book-open">
+Add descriptions for complex or non-obvious fields
+</Card>
+
+```yaml
+answer_model:
+  processing_status:
+    type: str
+    description: |
+      Current status of the order processing pipeline.
+      Values: 'received', 'validated', 'processing', 'shipped', 'delivered'
+    enum: ['received', 'validated', 'processing', 'shipped', 'delivered']
+```
+
 ## Step Transitions and Routing
 
 ### Route Conditions

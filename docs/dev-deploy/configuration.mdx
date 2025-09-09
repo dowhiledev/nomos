@@ -85,6 +85,12 @@ session = agent.create_session()
 ```yaml
 name: utility-bot
 persona: You are a helpful utility bot that can perform various calculations and data operations.
+
+# External schema definitions (optional)
+schemas:
+  user_profile: 'schemas/user_profile.json'
+  order_schema: 'models/order.py'
+
 steps:
   - step_id: start
     description: Handle user requests for mathematical operations or data processing.
@@ -126,6 +132,117 @@ server:
     allowed_origins:
       - "*"  # Use specific domains in production
 ```
+
+## Schema Configuration
+
+Define reusable schemas for structured responses in your agent:
+
+```yaml
+schemas:
+  user_profile: 'schemas/user_profile.json'
+  order_schema: 'models/order.py'
+  validation_rules: 'schemas/validation.json'
+```
+
+### Schema File Formats
+
+#### JSON Schema Files
+
+Create structured data models using JSON Schema:
+
+```json
+// schemas/user_profile.json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "User's full name"
+    },
+    "email": {
+      "type": "string",
+      "description": "User's email address",
+      "format": "email"
+    },
+    "preferences": {
+      "type": "object",
+      "properties": {
+        "theme": {
+          "type": "string",
+          "enum": ["light", "dark", "auto"]
+        }
+      }
+    }
+  },
+  "required": ["name", "email"]
+}
+```
+
+#### Python Schema Files
+
+Define models using Pydantic classes:
+
+```python
+# models/order.py
+from pydantic import BaseModel, EmailStr
+from typing import List, Optional
+from enum import Enum
+
+class OrderStatus(str, Enum):
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    SHIPPED = "shipped"
+
+class OrderItem(BaseModel):
+    product_id: str
+    name: str
+    quantity: int
+    price: float
+
+class Order(BaseModel):
+    order_id: str
+    customer_email: EmailStr
+    items: List[OrderItem]
+    status: OrderStatus = OrderStatus.PENDING
+    total_amount: float
+```
+
+### Schema Referencing
+
+Reference schemas in your step configurations:
+
+```yaml
+steps:
+  - step_id: collect_profile
+    description: Collect user profile information
+    answer_model: user_profile  # References JSON schema
+
+  - step_id: process_order
+    description: Process customer order
+    answer_model: order_schema.Order  # Specific Python model
+
+  - step_id: validate_data
+    description: Validate input data
+    answer_model: validation_rules  # Main schema model
+```
+
+### Schema Benefits
+
+<CardGroup cols={2}>
+  <Card title="Reusability" icon="recycle">
+    Use schemas across multiple agents and steps
+  </Card>
+  <Card title="Maintainability" icon="wrench">
+    Update schemas without changing agent configuration
+  </Card>
+  <Card title="Type Safety" icon="shield">
+    Full validation with detailed error messages
+  </Card>
+  <Card title="Version Control" icon="git-branch">
+    Track schema changes separately
+  </Card>
+</CardGroup>
 
 ### Advanced YAML Configuration
 
