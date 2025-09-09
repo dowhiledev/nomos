@@ -1644,7 +1644,7 @@ wheels = [
 
 [[package]]
 name = "nomos"
-version = "0.3.6"
+version = "0.3.7"
 source = { editable = "." }
 dependencies = [
     { name = "colorama" },
@@ -1657,6 +1657,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pyyaml" },
+    { name = "requests" },
 ]
 
 [package.optional-dependencies]
@@ -1756,6 +1757,7 @@ requires-dist = [
     { name = "pyjwt", marker = "extra == 'serve'", specifier = ">=2.10.1" },
     { name = "pyyaml", specifier = ">=6.0.2,<7.0.0" },
     { name = "redis", marker = "extra == 'serve'", specifier = ">=6.2.0,<7.0.0" },
+    { name = "requests", specifier = ">=2.25.0" },
     { name = "rich", marker = "extra == 'cli'", specifier = ">=13.0.0,<14.0.0" },
     { name = "sqlmodel", marker = "extra == 'serve'", specifier = ">=0.0.24,<0.0.25" },
     { name = "starlette-csrf", marker = "extra == 'serve'", specifier = ">=3.0.0" },
