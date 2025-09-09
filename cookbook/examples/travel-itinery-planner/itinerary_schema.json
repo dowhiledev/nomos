@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "days": {
+      "type": "array",
+      "description": "A list of days in the itinerary, each containing a list of activities and their details.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "day_number": {
+            "type": "integer",
+            "description": "The number of the day in the itinerary."
+          },
+          "activities": {
+            "type": "array",
+            "description": "A list of activities planned for the day, each with its details.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "The name of the activity."
+                },
+                "location": {
+                  "type": "string",
+                  "description": "The location of the activity."
+                },
+                "details": {
+                  "type": "string",
+                  "description": "Additional details about the activity (e.g., ticket prices, opening hours)."
+                },
+                "transportation": {
+                  "type": "string",
+                  "description": "Transportation details (e.g., how to get there, travel time)."
+                },
+                "source": {
+                  "type": "string",
+                  "description": "The source of the information (e.g., link to a website, article)."
+                }
+              },
+              "required": ["name", "location"]
+            }
+          },
+          "total_estimated_cost": {
+            "type": "number",
+            "description": "The total estimated cost for the day, including activities, dining, and transportation."
+          },
+          "summary": {
+            "type": "string",
+            "description": "A brief summary of the day's plan."
+          }
+        },
+        "required": ["day_number", "activities"]
+      }
+    },
+    "conclusion": {
+      "type": "string",
+      "description": "A summary of the entire itinerary, including key highlights and recommendations."
+    },
+    "ending_statement": {
+      "type": "string",
+      "description": "A closing statement to the user, asking whether they are satisfied with the plan or if they want to make changes."
+    }
+  },
+  "required": ["days"]
+}

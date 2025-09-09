@@ -125,7 +125,7 @@ class Step(BaseModel):
         routes (List[Route]): List of possible routes from this step.
         available_tools (List[str]): List of tool names available in this step.
         tools (List[Tool]): List of Tool objects available in this step.
-        answer_model (Optional[Dict[str, Dict[str, Any]]]): Pydantic model for the agent's answer structure.
+        answer_model (Optional[Union[str, Dict[str, Dict[str, Any]], BaseModel]]): Pydantic model for the agent's answer structure. Can be a dict, BaseModel class, or string reference to a schema.
         auto_flow (bool): Flag indicating if the step should automatically flow without additonal inputs or answering.
         provide_suggestions (bool): Flag indicating if the step should provide suggestions to the user.
     Methods:
@@ -144,7 +144,7 @@ class Step(BaseModel):
         validation_alias="tools",
         serialization_alias="tools",
     )
-    answer_model: Optional[Union[Dict[str, Dict[str, Any]], BaseModel]] = None
+    answer_model: Optional[Union[str, Dict[str, Dict[str, Any]], BaseModel]] = None
     auto_flow: bool = False
     quick_suggestions: bool = False
     flow_id: Optional[str] = None  # Add this to associate steps with flows
@@ -193,11 +193,40 @@ class Step(BaseModel):
         """
         if isinstance(self.answer_model, dict):
             return create_base_model("AnswerModel", self.answer_model)
-        elif isinstance(self.answer_model, BaseModel):
+        elif isinstance(self.answer_model, type) and issubclass(self.answer_model, BaseModel):
             return self.answer_model
+        elif isinstance(self.answer_model, str):
+            # Handle schema reference like "schema_name" or "schema_name.model_name"
+            from ..utils.schema_loader import schema_registry
+            parts = self.answer_model.split('.')
+            if len(parts) == 1:
+                # Just schema name, use the first available model or try case-insensitive match
+                schema_name = parts[0]
+                schema_models = schema_registry._schemas.get(schema_name, {})
+                if not schema_models:
+                    raise ValueError(f"Step '{self.step_id}': Schema '{schema_name}' not found")
+                
+                # Try exact match first
+                if schema_name in schema_models:
+                    return schema_models[schema_name]
+                
+                # Try case-insensitive match
+                for model_name, model in schema_models.items():
+                    if model_name.lower() == schema_name.lower():
+                        return model
+                
+                # Use the first available model
+                return next(iter(schema_models.values()))
+            elif len(parts) == 2:
+                schema_name, model_name = parts
+                return schema_registry.get_model(schema_name, model_name)
+            else:
+                raise ValueError(
+                    f"Step '{self.step_id}': answer_model string must be in format 'schema_name' or 'schema_name.model_name'"
+                )
         else:
             raise ValueError(
-                f"Step '{self.step_id}': answer_model must be a dictionary or a Pydantic model"
+                f"Step '{self.step_id}': answer_model must be a dictionary, BaseModel class, or string reference"
             )
 
     def get_available_routes(self) -> List[str]:
