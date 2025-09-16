@@ -116,4 +116,4 @@ For detailed information, check out our comprehensive guides:
 
 Join the NOMOS community! For roadmap, support, contributing guidelines, and more, see our [Community Guide](docs/md/community.md).
 
-[![Discord Banner 2](https://discord.com/api/guilds/1393886830553731183/widget.png?style=banner2)](https://discord.com/invite/2F4sD69w?utm_source=Discord%20Widget&utm_medium=Connect)
+[![Discord Banner 2](https://discord.com/api/guilds/1393886830553731183/widget.png?style=banner2)](https://discord.com/invite/KEWVDFrvKS?utm_source=Discord%20Widget&utm_medium=Connect)
