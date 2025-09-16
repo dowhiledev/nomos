@@ -1,8 +1,12 @@
-<h1>
+<h1 align="center">
   <a href="https://github.com/dowhiledev/nomos">
-    <img src="docs/assets/banner.jpg" alt="NOMOS">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dark.png">
+      <img src="docs/assets/light.png" alt="NOMOS" height="250">
+    </picture>
   </a>
 </h1>
+
 
 <div>
 
