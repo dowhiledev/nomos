@@ -80,9 +80,9 @@ llm:
 
 server:
   security:
-    enable_auth: true
-    auth_type: jwt
-    jwt_secret_key: "$JWT_SECRET_KEY"
+    # enable_auth: true
+    # auth_type: jwt
+    # jwt_secret_key: "$JWT_SECRET_KEY"
 
     # enable_rate_limiting: false
     # redis_url: redis://localhost:6379
@@ -92,4 +92,7 @@ server:
     # enable_csrf_protection: true
     # csrf_secret_key: "$CSRF_SECRET_KEY"
 
-    enable_token_endpoint: true
+    # enable_token_endpoint: true
+
+    allowed_origins:
+      - $FRONTEND_URL
