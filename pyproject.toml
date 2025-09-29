@@ -17,6 +17,7 @@ dependencies = [
     "numpy>=2.2.6",
     "httpx>=0.28.1",
     "requests>=2.25.0",
+    "instructor>=1.9.2",
 ]
 
 [tool.uv]
@@ -32,19 +33,6 @@ cli = [
     "rich (>=13.0.0,<14.0.0)",
 ]
 mcp = ["fastmcp (>=2.7.1)"]
-anthropic = ["anthropic (>=0.55.0,<0.56.0)"]
-openai = ["openai (>=1.76.0,<2.0.0)", "tiktoken (>=0.9.0,<0.10.0)"]
-mistralai = [
-    "instructor>=1.9.2",
-    "mistralai (>=1.7.0,<2.0.0)",
-]
-google = ["google-genai (>=1.12.1,<2.0.0)"]
-ollama = ["ollama (>=0.5.1)"]
-huggingface = ["huggingface_hub (>=0.32.0)"]
-groq = [
-    "groq (>=0.29.0)",
-    "instructor (>=1.9.2)",
-]
 traces = [
     "opentelemetry-api (>=1.33.0,<2.0.0)",
     "opentelemetry-sdk (>=1.33.0,<2.0.0)",
