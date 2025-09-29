@@ -437,5 +437,4 @@ class LLMBase:
         assert isinstance(summary, Summary), "Summary generation failed."
         return summary
 
-
 __all__ = ["LLMBase"]

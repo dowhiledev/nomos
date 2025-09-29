@@ -8,6 +8,8 @@ from pydantic import BaseModel
 from ..models.agent import Message
 from .base import LLMBase
 
+import instructor
+
 
 class Mistral(LLMBase):
     """Mistral AI LLM integration for Nomos."""
@@ -28,21 +30,20 @@ class Mistral(LLMBase):
         :param kwargs: Additional parameters for Mistral API.
         """
         try:
-            from instructor import Mode, from_mistral
             from mistralai import Mistral
         except ImportError:
             raise ImportError(
-                "Mistral package is not installed. Please install it using 'pip install nomos[mistralai]."
+                "Mistral package is not installed. Please install it using 'pip install mistralai'."
             )
 
         self.model = model
         self.embedding_model = embedding_model or "mistral-embed"
         api_key = os.environ["MISTRAL_API_KEY"]
         self.mistral_client = Mistral(api_key=api_key, **kwargs)
-        self.client = from_mistral(
+        self.client = instructor.from_mistral(
             client=self.mistral_client,
             model=self.model,
-            mode=Mode.MISTRAL_TOOLS,
+            mode=instructor.Mode.MISTRAL_TOOLS,
             use_async=False,
         )
 

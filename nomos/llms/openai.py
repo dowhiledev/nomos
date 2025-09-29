@@ -8,6 +8,8 @@ from pydantic import BaseModel
 from ..models.agent import Message
 from .base import LLMBase
 
+import instructor
+
 
 class OpenAI(LLMBase):
     """OpenAI Chat LLM integration for Nomos."""
@@ -31,12 +33,19 @@ class OpenAI(LLMBase):
             from openai import OpenAI
         except ImportError:
             raise ImportError(
-                "OpenAI package is not installed. Please install it using 'pip install nomos[openai]."
+                "OpenAI package is not installed. Please install it using 'pip install openai'."
             )
 
         self.model = model
         self.embedding_model = embedding_model or "text-embedding-3-small"
-        self.client = OpenAI(**kwargs)
+        self.openai_client = OpenAI(**kwargs)
+        self.client = instructor.from_openai(
+            client=self.openai_client,
+            mode=instructor.Mode.TOOLS,
+            model=self.model,
+            use_async=False,
+        )
+
 
     def get_output(
         self,
@@ -53,13 +62,13 @@ class OpenAI(LLMBase):
         :return: Parsed response as a BaseModel.
         """
         _messages = [msg.model_dump() for msg in messages]
-        comp = self.client.beta.chat.completions.parse(
+        resp = self.client.messages.create(
+            response_model=response_format,
             model=self.model,
             messages=_messages,
-            response_format=response_format,
             **kwargs,
         )
-        return comp.choices[0].message.parsed
+        return resp
 
     def generate(
         self,
@@ -76,7 +85,7 @@ class OpenAI(LLMBase):
         from openai.types.chat import ChatCompletion
 
         _messages = [msg.model_dump() for msg in messages]
-        comp: ChatCompletion = self.client.chat.completions.create(
+        comp: ChatCompletion = self.openai_client.chat.completions.create(
             messages=_messages,
             model=self.model,
             **kwargs,
@@ -92,7 +101,7 @@ class OpenAI(LLMBase):
 
     def embed_text(self, text: str) -> List[float]:
         """Embed a single text using the OpenAI embeddings API."""
-        response = self.client.embeddings.create(
+        response = self.openai_client.embeddings.create(
             model=self.embedding_model,
             input=text,
             encoding_format="float",
@@ -102,7 +111,7 @@ class OpenAI(LLMBase):
 
     def embed_batch(self, texts: List[str]) -> List[List[float]]:
         """Embed a batch of texts using the OpenAI embeddings API."""
-        response = self.client.embeddings.create(
+        response = self.openai_client.embeddings.create(
             model=self.embedding_model,
             input=texts,
             encoding_format="float",
@@ -147,8 +156,14 @@ class AzureOpenAI(OpenAI):
         if azure_endpoint is None:
             raise ValueError("AZURE_OPENAI_ENDPOINT environment variable must be set.")
 
-        self.client = AzureOpenAI(
+        self.openai_client = AzureOpenAI(
             api_key=api_key, azure_endpoint=azure_endpoint, api_version=api_version
+        )
+        self.client = instructor.from_openai(
+            client=self.openai_client,
+            mode=instructor.Mode.TOOLS,
+            model=self.model,
+            use_async=False,
         )
 
 
