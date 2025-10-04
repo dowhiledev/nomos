@@ -1,9 +1,10 @@
 """Agent configuration and management for Nomos."""
 
 import os
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, TypedDict, Union
 
 from .config import AgentConfig
+from ..constants import DEFAULT_PERSONA, DEFAULT_SYSTEM_MESSAGE, DEFAULT_MAX_ERRORS, DEFAULT_MAX_ITER
 from ..llms import LLMBase
 from ..memory.base import Memory
 from ..models.agent import DecisionConstraints, Event, Response, State, Step
@@ -15,153 +16,50 @@ from ..utils.logging import log_debug, log_error
 from .session import Session
 
 
+class GlobalConfig(TypedDict):
+    """Global configuration for the agent."""
+    name: str
+    persona: str
+    system_message: str
+    max_errors: int
+    max_iter: int
+
+
 class Agent:
     """Main interface for creating and managing Nomos Agents."""
 
     def __init__(
         self,
-        llm: Union[LLMBase, Dict[str, LLMBase]],
-        name: str,
-        steps: List[Step],
-        start_step_id: str,
-        persona: Optional[str] = None,
-        system_message: Optional[str] = None,
-        tools: Optional[List[Union[callable, ToolWrapper]]] = None,
-        flows: Optional[List[Flow]] = None,
-        show_steps_desc: bool = False,
-        max_errors: int = 3,
-        max_iter: int = 5,
-        config: Optional[AgentConfig] = None,
-        embedding_model: Optional[LLMBase] = None,
-    ) -> None:
-        """
-        Initialize an Agent.
-
-        :param llm: LLMBase instance or dictionary of LLMs.
-        :param name: Name of the agent.
-        :param steps: List of Step objects.
-        :param start_step_id: ID of the starting step.
-        :param persona: Optional persona string.
-        :param system_message: Optional system message.
-        :param tools: List of tool callables or ToolWrapper instances.
-        :param flows: Optional list of Flow objects.
-        :param show_steps_desc: Whether to show step descriptions.
-        :param max_errors: Maximum consecutive errors before stopping or fallback.
-        :param max_iter: Maximum number of decision loops for single action.
-        :param config: Optional AgentConfig.
-        :param embedding_model: Optional LLMBase instance for embeddings.
-        """
-        self.llm = llm
-        self.name = name
-        self.steps = {s.step_id: s for s in steps}
-        self.start = start_step_id
-        self.system_message = system_message
-        self.persona = persona
-        self.show_steps_desc = show_steps_desc
-        self.max_errors = max_errors
-        self.max_iter = max_iter
-        self.config = config
-        self.embedding_model = (
-            embedding_model
-            or (config.get_embedding_model() if config else None)
-            or (llm if isinstance(llm, LLMBase) else llm.get("global", None))
-        )
-        assert self.embedding_model, "Embedding model must be provided or configured."
-        self._setup_logging()
-        self.flows = flows or (
-            list(create_flows_from_config(config).flows.values())
-            if config and config.flows
-            else None
-        )
-
-        # Remove duplicates of tools based on their names or IDs
-        seen = set()
-        _tools = []
-        for tool in tools or []:
-            tool_id = (
-                tool.name if isinstance(tool, ToolWrapper) else getattr(tool, "__name__", None)
-            )
-            tool_id = tool_id or id(tool)  # Fallback to id if no name
-            if tool_id not in seen:
-                seen.add(tool_id)
-                _tools.append(tool)
-
-        del seen  # Clear the seen set to free memory
-
-        self.tools = get_tools(_tools, config.tools.tool_defs if config and config.tools else None)
-        del _tools  # Clear the temporary list to free memory
-
-        # Validate start step ID
-        if start_step_id not in self.steps:
-            log_error(f"Start step ID {start_step_id} not found in steps")
-            raise ValueError(f"Start step ID {start_step_id} not found in steps")
-        # Validate step IDs in routes
-        for step in self.steps.values():
-            for route in step.routes:
-                if route.target not in self.steps:
-                    log_error(
-                        f"Route target {route.target} not found in steps for step {step.step_id}"
-                    )
-                    raise ValueError(
-                        f"Route target {route.target} not found in steps for step {step.step_id}"
-                    )
-
-        # Validate tool names
-        for step in self.steps.values():
-            # check if the step.available tools is subset of the session tools
-            if not set(step.available_tools).issubset(set(self.tools.keys())):
-                err_msg = f"Step {step.step_id} has tools that are not defined in agent tools"
-                log_error(err_msg)
-                raise ValueError(err_msg)
-
-        # Go through all the steps and if there are examples in them, perform batch embedding
-        for step in self.steps.values():
-            if step.examples:
-                log_debug(f"Step {step.step_id} has examples, performing batch embedding")
-                step.batch_embed_examples(embedding_model=self.embedding_model)
-
-    @classmethod
-    def from_config(
-        cls,
         config: AgentConfig,
-        llm: Optional[Union[LLMBase, Dict[str, LLMBase]]] = None,
         tools: Optional[List[Union[callable, ToolWrapper]]] = None,
-    ) -> "Agent":
-        """
-        Create an Agent from an AgentConfig object.
+    ) -> None:
+        self.logging.initialize() # TODO: Implement logging initialization in config
+        self.llm = config.get_llm()
+        self.embedding_model = config.get_embedding_model()
+        assert self.llm, "Atleast one LLM must be configured."
+        assert self.embedding_model, "Embedding model must be provided or configured."
 
-        :param config: AgentConfig instance.
-        :param llm: Optional LLMBase instance or dictionary of LLMs.
-        :param tools: List of tool callables.
-        :return: Agent instance.
-        """
-        _llm = llm or config.get_llm()
-        assert _llm, "LLM must be provided either as a parameter or in the config."
+        self.steps = config.steps
+        assert len(self.steps) > 0, "Atleast one step must be configured."
+        for step in self.steps:
+            if step.examples:
+                step.batch_embed_examples(embedding_model=self.embedding_model)
+        self.start_step = config.get_start_step() # TODO: Implement get start step logic in config
+        self._validate_steps() # TODO: Implement step validation logic
 
-        tools = tools or []
-        tools.extend(config.tools.get_tools())
-        return cls(
-            llm=_llm,
+        self.tools = tools or []
+        self.tools.extend(config.tools.get_tools())
+        self.tools = get_tools(self.tools, config.tools.tool_defs)
+        
+        self.global_config = GlobalConfig(
             name=config.name,
-            steps=config.steps,
-            start_step_id=config.start_step_id,
-            system_message=config.system_message,
-            persona=config.persona,
-            tools=tools,
-            show_steps_desc=config.show_steps_desc,
-            max_errors=config.max_errors,
-            max_iter=config.max_iter,
-            config=config,
+            persona=config.persona or DEFAULT_PERSONA,
+            system_message=config.system_message or DEFAULT_SYSTEM_MESSAGE,
+            max_errors=config.max_errors or DEFAULT_MAX_ERRORS,
+            max_iter=config.max_iter or DEFAULT_MAX_ITER,
         )
 
-    def _setup_logging(self) -> None:
-        """Set up logging configuration."""
-        # temporary fix until config is made available to other parts.
-        if self.config and self.config.logging:
-            logging_config = self.config.logging
-            os.environ.setdefault("NOMOS_ENABLE_LOGGING", str(logging_config.enable).lower())
-            if logging_config.handlers:
-                os.environ.setdefault("NOMOS_LOG_LEVEL", logging_config.handlers[0].level.upper())
+        self.flows = config.get_flows() # TODO: Implement get flows logic in config
 
     def create_session(self, memory: Optional[Memory] = None) -> Session:
         """
