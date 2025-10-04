@@ -77,7 +77,6 @@ llm:
   provider: mistral
   model: devstral-small-2507
 
-
 server:
   security:
     # enable_auth: true
