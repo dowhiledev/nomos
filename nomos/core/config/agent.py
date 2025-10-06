@@ -81,7 +81,6 @@ class AgentConfig(BaseSettings):
     steps: List[Step] = Field(..., description="List of steps in the flow")
     start_step_id: str = Field(..., description="ID of the starting step")
     system_message: Optional[str] = Field(None, description="System message for the agent")
-    show_steps_desc: bool = Field(False, description="Flag to show step descriptions")
     max_errors: int = Field(DEFAULT_MAX_ERRORS, description="Maximum number of errors allowed")
     max_iter: int = Field(DEFAULT_MAX_ITER, description="Maximum number of iterations allowed")
     max_examples: int = Field(DEFAULT_MAX_EXAMPLES, description="Maximum number of examples for decision-making")

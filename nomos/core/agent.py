@@ -4,10 +4,15 @@ import os
 from typing import Dict, List, Optional, TypedDict, Union
 
 from .config import AgentConfig
-from ..constants import DEFAULT_PERSONA, DEFAULT_SYSTEM_MESSAGE, DEFAULT_MAX_ERRORS, DEFAULT_MAX_ITER
+from ..constants import (
+    DEFAULT_PERSONA,
+    DEFAULT_SYSTEM_MESSAGE,
+    DEFAULT_MAX_ERRORS,
+    DEFAULT_MAX_ITER,
+)
 from ..llms import LLMBase
 from ..memory.base import Memory
-from ..models.agent import DecisionConstraints, Event, Response, State, Step
+from ..models.agent import Action, DecisionConstraints, Event, Response, State, Step
 from ..models.flow import Flow
 from ..models.tool import ToolWrapper, get_tools
 from ..utils.flow_utils import create_flows_from_config
@@ -18,6 +23,7 @@ from .session import Session
 
 class GlobalConfig(TypedDict):
     """Global configuration for the agent."""
+
     name: str
     persona: str
     system_message: str
@@ -33,7 +39,7 @@ class Agent:
         config: AgentConfig,
         tools: Optional[List[Union[callable, ToolWrapper]]] = None,
     ) -> None:
-        self.logging.initialize() # TODO: Implement logging initialization in config
+        self.logging.initialize()  # TODO: Implement logging initialization in config
         self.llm = config.get_llm()
         self.embedding_model = config.get_embedding_model()
         assert self.llm, "Atleast one LLM must be configured."
@@ -44,13 +50,15 @@ class Agent:
         for step in self.steps:
             if step.examples:
                 step.batch_embed_examples(embedding_model=self.embedding_model)
-        self.start_step = config.get_start_step() # TODO: Implement get start step logic in config
-        self._validate_steps() # TODO: Implement step validation logic
+        self.start_step = (
+            config.get_start_step()
+        )  # TODO: Implement get start step logic in config
+        self._validate_steps()  # TODO: Implement step validation logic
 
         self.tools = tools or []
         self.tools.extend(config.tools.get_tools())
         self.tools = get_tools(self.tools, config.tools.tool_defs)
-        
+
         self.global_config = GlobalConfig(
             name=config.name,
             persona=config.persona or DEFAULT_PERSONA,
@@ -58,120 +66,86 @@ class Agent:
             max_errors=config.max_errors or DEFAULT_MAX_ERRORS,
             max_iter=config.max_iter or DEFAULT_MAX_ITER,
         )
+        self.config = config
 
-        self.flows = config.get_flows() # TODO: Implement get flows logic in config
+        self.flows = config.get_flows()  # TODO: Implement get flows logic in config
 
-    def create_session(self, memory: Optional[Memory] = None) -> Session:
+    def create(self, memory: Optional[Memory] = None) -> Session:
         """
         Create a new Session for this agent.
 
         :param memory: Optional Memory instance.
         :return: Session instance.
         """
-        log_debug("Creating new session")
-        if not memory:
-            memory = (
-                self.config.memory.get_memory() if self.config and self.config.memory else Memory()
-            )
-        assert self.embedding_model, "Embedding model must be provided or configured."
+        # Need to ensure memory is fresh for each session
+        memory = (
+            memory or self.config.memory.get_memory()
+            if self.config.memory
+            else Memory()
+        )
         return Session(
-            name=self.name,
-            llm=self.llm,
+            agent=self,
             memory=memory,
-            steps=self.steps,
-            start_step_id=self.start,
-            system_message=self.system_message,
-            persona=self.persona,
-            tools=self.tools,
-            flows=list(self.flows) if self.flows else None,
-            show_steps_desc=self.show_steps_desc,
-            max_errors=self.max_errors,
-            max_iter=self.max_iter,
-            config=self.config,
-            embedding_model=self.embedding_model,
         )
 
-    def load_session(self, session_id: str) -> Session:
+    def load(self, session_id: str) -> Session:
         """
         Load a Session by session_id.
 
         :param session_id: The session ID string.
         :return: Loaded Session instance.
         """
-        log_debug(f"Loading session {session_id}")
         return Session.load_session(session_id)
 
-    def get_session_from_state(self, state: State) -> Session:
+    def from_state(self, state: State) -> Session:
         """
         Create a Session from a State object.
 
         :param state: The session state.
         :return: Session instance.
         """
-        log_debug(f"Creating session from state: {state}")
-
-        memory = self.config.memory.get_memory() if self.config and self.config.memory else Memory()
-
-        assert self.embedding_model, "Embedding model must be provided or configured."
-        session = Session(
-            name=self.name,
-            llm=self.llm,
+        memory = (
+            self.config.memory.get_memory()
+            if self.config and self.config.memory
+            else Memory()
+        )
+        return Session(
+            agent=self,
             memory=memory,
-            tools=self.tools,
-            config=self.config,
-            embedding_model=self.embedding_model,
-            persona=self.persona,
-            steps=self.steps,
-            start_step_id=self.start,
-            system_message=self.system_message,
-            flows=list(self.flows) if self.flows else None,
-            show_steps_desc=self.show_steps_desc,
-            max_errors=self.max_errors,
-            max_iter=self.max_iter,
             state=state,
         )
 
-        return session
-
-    def next(
+    def __call__(
         self,
-        user_input: Optional[str] = None,
-        session_data: Optional[Union[dict, State]] = None,
-        return_tool: bool = False,
-        return_step: bool = False,
+        input: Optional[Input] = None,
+        state: Optional[State] = None,
+        return_at: Optional[List[Action]] = [Action.RESPOND],
+        constraints: Optional[DecisionConstraints] = None,
+        skip_decision: bool = True,
         verbose: bool = False,
-        decision_constraints: Optional[DecisionConstraints] = None,
-        keep_event_decision: bool = False,
     ) -> Response:
         """
         Advance the session to the next step based on user input and LLM decision.
 
-        :param user_input: Optional user input string.
-        :param session_data: Optional session data as a dictionary or State object.
-        :param return_tool: Whether to return tool results.
-        :param return_step: Whether to return step Transitions.
+        :param input: Optional user input string or Input object.
+        :param state: Optional session state as a State object.
+        :param return_at: List of actions at which to return.
+        :param constraints: Optional constraints for the decision model on retry.
+        :param skip_decision: Whether to skip decision-making and proceed to tool execution.
         :param verbose: Whether to return verbose output.
-        :param decision_constraints: Optional constraints for the decision model on retry.
-        :param keep_event_decision: Whether to retain decision data in returned events.
         :return: A Response containing the decision and tool output, along with the updated session state.
-        :raises ValueError: If session_data is provided but not a valid State object.
+        :raises ValueError: If state is provided but not a valid State object.
         """
-        if isinstance(session_data, dict):
-            session_data = State.model_validate(session_data)
-        session = (
-            self.get_session_from_state(session_data)
-            if session_data is not None and isinstance(session_data, State)
-            else self.create_session()
-        )
-        res = session.next(
-            user_input=user_input,
-            return_tool=return_tool,
-            return_step=return_step,
-            decision_constraints=decision_constraints,
+        session = self.from_state(state) if state else self.create()
+        res = session(
+            input=input,
+            return_at=return_at,
+            constraints=constraints,
             verbose=verbose,
         )
+
         state = session.get_state()
-        if not keep_event_decision:
+        if skip_decision:
             for item in state.history:
                 if isinstance(item, Event):
                     item.decision = None
@@ -182,7 +156,7 @@ class Agent:
         res.state = state
         return res
 
-    def display(self, save_path: Optional[str] = None, is_notebook: bool = True) -> None:
+    def show(self, save_path: Optional[str] = None, is_notebook: bool = True) -> None:
         """
         Visualize the agent's steps and flows.
 
@@ -192,14 +166,18 @@ class Agent:
         from ..utils.utils import create_mermaid_graph, mermaid_svg
 
         if not is_notebook and not save_path:
-            raise ValueError("save_path must be provided if not in a notebook environment.")
+            raise ValueError(
+                "save_path must be provided if not in a notebook environment."
+            )
 
         mm_code = create_mermaid_graph(
             steps=self.steps, flows=self.flows if self.flows else [], tools=self.tools
         )
         mermaid_svg(
             mm_code,
-            save_to=os.path.join(save_path, f"{self.name}_graph.svg") if save_path else None,
+            save_to=(
+                os.path.join(save_path, f"{self.name}_graph.svg") if save_path else None
+            ),
             display=is_notebook,
         )
 
