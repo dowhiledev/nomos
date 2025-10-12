@@ -76,22 +76,29 @@ class AgentConfig(BaseSettings):
         tools: Tools configuration.
         logging: Optional logging configuration.
     """
+    # Agent identity and flow
     name: str = Field(..., description="Name of the agent")
     persona: Optional[str] = Field(None, description="Persona of the agent")
+    start_step_id: str = Field(..., description="ID of the starting step") # TODO: Remove this and add the ability to tag a step as start
     steps: List[Step] = Field(..., description="List of steps in the flow")
-    start_step_id: str = Field(..., description="ID of the starting step")
+    flows: Optional[List[FlowConfig]] = Field(None, description="Flow configurations")
+    schemas: Optional[Dict[str, str]] = Field(None, description="Schema definitions (name to file path)")
+    tools: ToolsConfig = Field(default_factory=ToolsConfig, description="Tools configuration")
+
+    # Global settings
     system_message: Optional[str] = Field(None, description="System message for the agent")
     max_errors: int = Field(DEFAULT_MAX_ERRORS, description="Maximum number of errors allowed")
     max_iter: int = Field(DEFAULT_MAX_ITER, description="Maximum number of iterations allowed")
     max_examples: int = Field(DEFAULT_MAX_EXAMPLES, description="Maximum number of examples for decision-making")
     threshold: float = Field(DEFAULT_THRESHOLD, description="Minimum similarity score for examples")
+
+    # Model configurations
     llm: Optional[Union[LLMConfig, Dict[str, LLMConfig]]] = Field(None, description="LLM configuration(s)")
     embedding_model: Optional[LLMConfig] = Field(None, description="Embedding model configuration")
     memory: Optional[MemoryConfig] = Field(None, description="Memory configuration")
-    flows: Optional[List[FlowConfig]] = Field(None, description="Flow configurations")
-    schemas: Optional[Dict[str, str]] = Field(None, description="Schema definitions (name to file path)")
+
+    # Other configurations
     server: ServerConfig = Field(default_factory=ServerConfig, description="Server configuration")
-    tools: ToolsConfig = Field(default_factory=ToolsConfig, description="Tools configuration")
     logging: Optional[LoggingConfig] = Field(None, description="Logging configuration")
 
     @classmethod
