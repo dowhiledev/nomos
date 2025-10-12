@@ -1,7 +1,9 @@
 """Agent configuration and management for Nomos."""
 
 import os
-from typing import Dict, List, Optional, TypedDict, Union
+from typing import List, Optional, Union
+
+from pydantic import BaseModel
 
 from .config import AgentConfig
 from ..constants import (
@@ -10,18 +12,14 @@ from ..constants import (
     DEFAULT_MAX_ERRORS,
     DEFAULT_MAX_ITER,
 )
-from ..llms import LLMBase
 from ..memory.base import Memory
-from ..models.agent import Action, DecisionConstraints, Event, Response, State, Step
-from ..models.flow import Flow
+from ..models.agent import Action, DecisionConstraints, Event, Response, State, Input
 from ..models.tool import ToolWrapper, get_tools
-from ..utils.flow_utils import create_flows_from_config
-from ..utils.logging import log_debug, log_error
 
 from .session import Session
 
 
-class GlobalConfig(TypedDict):
+class GlobalConfig(BaseModel):
     """Global configuration for the agent."""
 
     name: str
@@ -59,7 +57,7 @@ class Agent:
         self.tools.extend(config.tools.get_tools())
         self.tools = get_tools(self.tools, config.tools.tool_defs)
 
-        self.global_config = GlobalConfig(
+        self._globals = GlobalConfig(
             name=config.name,
             persona=config.persona or DEFAULT_PERSONA,
             system_message=config.system_message or DEFAULT_SYSTEM_MESSAGE,
@@ -119,7 +117,7 @@ class Agent:
         self,
         input: Optional[Input] = None,
         state: Optional[State] = None,
-        return_at: Optional[List[Action]] = [Action.RESPOND],
+        return_at: List[Action] = [Action.RESPOND],
         constraints: Optional[DecisionConstraints] = None,
         skip_decision: bool = True,
         verbose: bool = False,

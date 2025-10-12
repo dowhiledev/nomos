@@ -42,6 +42,36 @@ class Action(Enum):
     END = "END"
 
 
+class Part(BaseModel):
+    """
+    Represents a part of the input, which can be text, image, or audio.
+
+    Attributes:
+        type (str): The type of the part ('text', 'image', 'audio').
+        content (Any): The content of the part.
+    """
+
+    type: Literal["text", "image", "audio"]
+    content: Any
+
+
+class Input(BaseModel):
+    """
+    Represents user input to the agent.
+
+    Attributes:
+        parts (List[Part]): The parts of the input from the user.
+    """
+
+    parts: List[Part] = Field(
+        ..., description="List of text, image, audio parts that make up the input."
+    )
+
+    parts: List[Part] = Field(
+        ..., description="List of text, image, audio parts that make up the input."
+    )
+
+
 class Route(BaseModel):
     """
     Represents a route (transition) from one step to another in the flow.
@@ -348,10 +378,10 @@ class Step(BaseModel):
 class Event(BaseModel):
     """An event stored in memory."""
 
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     type: str
     content: str
     decision: Optional["Decision"] = None
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     def __str__(self) -> str:
         return f"[{self.type.title()}] {self.content}"

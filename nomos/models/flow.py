@@ -1,4 +1,4 @@
-"""Flow construct for encapsulating sets of steps with shared context and components."""
+ """Flow construct for encapsulating sets of steps with shared context and components."""
 
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List, Optional, Union
