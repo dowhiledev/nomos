@@ -1,8 +1,0 @@
-fastapi
-uvicorn
-requests
-psutil
-nomos[cli,serve,traces,openai,mistralai,google,ollama,huggingface]
-python-multipart
-python-dotenv
-crewai[tools]
