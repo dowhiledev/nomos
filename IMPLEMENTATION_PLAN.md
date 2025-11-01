@@ -51,7 +51,7 @@ Spike 3 — Async LLM Streaming Adapters (OpenAI, Groq)
  - Deliverables:
   - Provider shims (openai, groq) with typed outputs
   - Conformance tests (token stream, finish reasons, errors)
- - Status: Pending (using fake provider in tests)
+ - Status: In progress (OpenAIProvider adapter added with fake-client test; real client behind optional extra)
 
 Spike 4 — Tool Runner 2.0 (Async, Progress, Cancellation)
 - Goals: Async tool contract with progress/partial outputs; budgets/timeouts; safe execution.
@@ -59,7 +59,7 @@ Spike 4 — Tool Runner 2.0 (Async, Progress, Cancellation)
  - Deliverables:
   - `nomos-tools` runner; progress events (`tool.started|progress|stdout|completed|error`)
   - Budget/timeout enforcement; structured errors; unit tests
- - Status: In progress (orchestrator integration with fake tool runner in tests)
+ - Status: In progress (SimpleToolRunner implemented over registry; orchestrator integration and tests in place)
 
 Spike 5 — Graph Runtime MVP (Nodes Only)
 - Goals: Compose nodes and edges; compile() → Agent; execute via orchestrator.
@@ -68,7 +68,7 @@ Spike 5 — Graph Runtime MVP (Nodes Only)
   - Graph builder with validation (no dangling nodes; legal conditions)
   - Compile to Agent (serializable definition)
   - Example parity with `examples/conceptual_agent/graph.py`
- - Status: In progress (minimal AgentSpec with MOVE routing; orchestrator current_node & routing.applied)
+ - Status: In progress (minimal AgentSpec with MOVE routing; next: validation, additional conditions, compile helpers)
 
 Spike 6 — Checkpointing + Replay
 - Goals: Deterministic recovery; event-log → state reconstruction; node-boundary checkpoints.
@@ -76,14 +76,14 @@ Spike 6 — Checkpointing + Replay
  - Deliverables:
   - Checkpointer plugin interface + Redis/Postgres implementations (JSONB)
   - Replay utility for timeline → state
- - Status: In progress (in-memory checkpoint store + checkpoint.created control)
+ - Status: In progress (in-memory checkpoint store + checkpoint.created control; next: restore path + replay util)
 
 Spike 7 — SSE/WS Server (duplex)
 - Goals: Optional transport to consume events and control sessions remotely.
  - Scope: HTTP: create/input/control/state; SSE events; WS bi-directional sessions (send inputs + receive events).
  - Deliverables:
   - `nomos-server` with `/v2` endpoints
- - Status: Pending
+ - Status: In progress (FastAPI app with SSE + WS endpoints; thin over orchestrator)
 
 Spike 8 — Interrupt Controller + Prioritization
 - Goals: Barge-in, pause/resume/cancel; backpressure policies.
@@ -148,6 +148,7 @@ Milestone Grouping & Exit Criteria
   - Exit: Conceptual example runs locally with streaming and a simple tool call.
 - M3 Transport (6,7): Server endpoints operational (duplex).
   - Exit: curl/web client can create session, stream SSE/WS, send inputs and control; e2e demo.
+  - Status: In progress
 - M4 Multimodal & Interrupts (8,9): Content‑parts and robust interrupt controller.
   - Exit: Image prompt works; mid‑token and mid‑tool cancel tested.
 - M5 Specialization & Observability (10,11): Subgraphs + agent‑as‑tool; tracing/metrics.
