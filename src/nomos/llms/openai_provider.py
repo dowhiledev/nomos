@@ -82,12 +82,18 @@ class OpenAIProvider(LLMProviderPort):
 
         oai_messages = _to_openai_messages(messages)
         # Start streaming chat completion
-        stream = client.chat.completions.create(
-            model=self._model,
-            messages=oai_messages,
-            stream=True,
-            response_format={"type": "json_object"},
-        )
+        try:
+            stream = client.chat.completions.create(
+                model=self._model,
+                messages=oai_messages,
+                stream=True,
+                response_format={"type": "json_object"},
+            )
+        except TypeError:
+            # Fake clients in tests may not accept response_format
+            stream = client.chat.completions.create(
+                model=self._model, messages=oai_messages, stream=True
+            )
         # Aggregate the full text to yield a final RESPOND decision, or collect tool_call deltas
         full_text: List[str] = []
         tool_calls: Dict[int, Dict[str, Any]] = {}

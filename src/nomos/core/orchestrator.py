@@ -19,11 +19,12 @@ from dataclasses import dataclass
 from typing import Any, AsyncIterator, Callable, Dict, Optional
 
 from .events import EventType, SessionEvent, TokenFrame, DecisionFrame
+from nomos.graph import AgentSpec
+from nomos.graph.prompt import edge_conditions_for_prompt
 from .state import SessionState
 from .store.memory import InMemoryEventStore
 from .store.checkpoint_memory import InMemoryCheckpointStore
 from .ports import LLMProviderPort, ToolRunnerPort
-from nomos.graph import AgentSpec
 from .observe import inc, span, measure
 from .redaction import redact_mapping
 
@@ -162,13 +163,53 @@ class Orchestrator:
                 )
                 allowed_tools = ov.get("allowed_tools")
 
-                # Stream decision from effective provider; provider yields generic frames
-                with (
-                    span("provider.stream_decision"),
-                    measure("provider.stream_decision"),
-                ):
+                # Agent loop: continue making decisions within this input until RESPOND or max turns
+                turns = 0
+                messages_base = list(payload.get("messages", []))
+                while True:
+                    turns += 1
+                    if turns > 1:
+                        break
+                    with (
+                        span("provider.stream_decision"),
+                        measure("provider.stream_decision"),
+                    ):
+                        # Augment messages with graph context when available
+                        msgs = list(messages_base)
+                        if isinstance(self._agent, AgentSpec) and current_node_id:
+                            try:
+                                edges_txt = edge_conditions_for_prompt(self._agent, current_node_id)  # type: ignore[arg-type]
+                                tools_list = list(allowed_tools) if allowed_tools else []
+                                sys_msg = {
+                                    "role": "system",
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "data": (
+                                                "You are an agent deciding the next step or tool call based on the current node.\n"
+                                                "Output strictly one JSON object with a single decision. Valid shapes:\n"
+                                                "- MOVE: {\"action\":\"MOVE\",\"step_id\":<one of allowed targets>}\n"
+                                                "- TOOL_CALL: {\"action\":\"TOOL_CALL\",\"tool_call\":{\"tool_name\":<name>,\"tool_kwargs\":{...}}}\n"
+                                                "- RESPOND: {\"action\":\"RESPOND\",\"response\":<text>}\n"
+                                                "No commentary, no markdown, no code fences."
+                                            ),
+                                        }
+                                    ],
+                                }
+                                assistant_msg = {
+                                    "role": "assistant",
+                                    "content": [
+                                        {"type": "text", "data": f"Current node: {current_node_id}"},
+                                        {"type": "text", "data": "Allowed targets:\n" + edges_txt},
+                                        {"type": "text", "data": f"Tools available: {tools_list}"},
+                                    ],
+                                }
+                                msgs = [sys_msg, assistant_msg] + msgs
+                            except Exception:
+                                msgs = list(messages_base)
+                        decision_data = None
                     async for frame in eff_provider.stream_decision(  # type: ignore[union-attr]
-                        payload.get("messages", []), schema=payload.get("schema")
+                        msgs, schema=payload.get("schema")
                     ):
                         # Check pause between frames
                         await self._resume_events[session_id].wait()
@@ -240,8 +281,8 @@ class Orchestrator:
                                 ],
                             )
                             inc(EventType.DECISION_COMPLETED.value)
-                            # If decision calls a tool, handle via tool runner
-                            data = ddata or {}
+                            decision_data = ddata or {}
+                            data = decision_data
                             action = data.get("action")
                             if action == "TOOL_CALL":
                                 tool_call = data.get("tool_call", {}) or {}
@@ -301,6 +342,7 @@ class Orchestrator:
                                                     yield fr
 
                                         runner = _FilteredRunner(runner, allowed_tools)
+                                    last_result: Any | None = None
                                     async for tframe in runner.run(
                                         tool_name, tool_kwargs, ctx
                                     ):
@@ -313,6 +355,24 @@ class Orchestrator:
                                             break
                                         await self._append(session_id, [tframe])
                                         inc(tframe.get("type", "tool.frame"))
+                                        if tframe.get("type") == "tool.completed":
+                                            last_result = tframe.get("result")
+                                    # feed tool result back into messages for next turn
+                                    if last_result is not None:
+                                        import json as _json  # local import to avoid top-level cost
+
+                                        messages_base.append(
+                                            {
+                                                "role": "assistant",
+                                                "content": [
+                                                    {
+                                                        "type": "text",
+                                                        "data": f"TOOL_RESULT {tool_name}: "
+                                                        + _json.dumps(last_result)[:1000],
+                                                    }
+                                                ],
+                                            }
+                                        )
                             # Handle routing (MOVE) only on decision frame
                             if isinstance(self._agent, AgentSpec) and action == "MOVE":
                                 to_id = self._agent.route(
@@ -337,7 +397,8 @@ class Orchestrator:
                                     )
                                     inc(EventType.ROUTING_APPLIED.value)
                                     self._current_node[session_id] = to_id
-                            break
+                        # End after one decision turn per input (multi-turn handled by client or future loop)
+                        break
             except Exception as exc:  # noqa: BLE001
                 await self._append(
                     session_id,
