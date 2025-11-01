@@ -6,7 +6,6 @@ Not used in CI; requires a table with schema: (session_id text, checkpoint_id te
 
 from __future__ import annotations
 
-from typing import Any, Dict
 
 from nomos.core.schemas import Checkpoint
 

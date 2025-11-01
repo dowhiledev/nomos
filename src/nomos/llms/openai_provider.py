@@ -35,7 +35,9 @@ def _to_openai_content(parts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:  # 
     return out
 
 
-def _to_openai_messages(messages: List[Union[Message, Dict[str, Any]]]) -> List[Dict[str, Any]]:  # noqa: ANN401
+def _to_openai_messages(
+    messages: List[Union[Message, Dict[str, Any]]],
+) -> List[Dict[str, Any]]:  # noqa: ANN401
     # Convert typed Messages to OpenAI message format
     oai: List[Dict[str, Any]] = []
     for m in messages:

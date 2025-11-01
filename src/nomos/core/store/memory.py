@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
-from typing import Any, AsyncIterator, Dict, List
+from typing import AsyncIterator, Dict, List
 
 from nomos.core.events import SessionEvent
 

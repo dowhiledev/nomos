@@ -66,25 +66,29 @@ class Orchestrator:
             safe = []
             for ev in events:
                 redacted_data = self._redact(ev.data)
-                safe.append(SessionEvent(
-                    session_id=ev.session_id,
-                    type=ev.type,
-                    data=redacted_data,
-                    node_id=ev.node_id,
-                    event_id=ev.event_id
-                ))
+                safe.append(
+                    SessionEvent(
+                        session_id=ev.session_id,
+                        type=ev.type,
+                        data=redacted_data,
+                        node_id=ev.node_id,
+                        event_id=ev.event_id,
+                    )
+                )
         else:
             # always minimally redact known sensitive keys in event data (best-effort)
             safe = []
             for ev in events:
                 redacted_data = redact_mapping(ev.data)
-                safe.append(SessionEvent(
-                    session_id=ev.session_id,
-                    type=ev.type,
-                    data=redacted_data,
-                    node_id=ev.node_id,
-                    event_id=ev.event_id
-                ))
+                safe.append(
+                    SessionEvent(
+                        session_id=ev.session_id,
+                        type=ev.type,
+                        data=redacted_data,
+                        node_id=ev.node_id,
+                        event_id=ev.event_id,
+                    )
+                )
         await self._store.append(session_id, safe)
 
     async def create_session(self) -> _Session:
@@ -110,9 +114,12 @@ class Orchestrator:
         inc(EventType.SESSION_CREATED.value)
         return _Session(id=sid)
 
-    async def input(self, session_id: str, inputs: Union[SessionInput, Dict[str, Any]]) -> None:
+    async def input(
+        self, session_id: str, inputs: Union[SessionInput, Dict[str, Any]]
+    ) -> None:
         if isinstance(inputs, dict):
             inputs = SessionInput.model_validate(inputs)
+        assert isinstance(inputs, SessionInput)
         await self._append(
             session_id,
             [
@@ -192,8 +199,12 @@ class Orchestrator:
                         msgs = list(messages_base)
                         if isinstance(self._agent, AgentSpec) and current_node_id:
                             try:
-                                edges_txt = edge_conditions_for_prompt(self._agent, current_node_id)  # type: ignore[arg-type]
-                                tools_list = list(allowed_tools) if allowed_tools else []
+                                edges_txt = edge_conditions_for_prompt(
+                                    self._agent, current_node_id
+                                )  # type: ignore[arg-type]
+                                tools_list = (
+                                    list(allowed_tools) if allowed_tools else []
+                                )
                                 sys_msg = {
                                     "role": "system",
                                     "content": [
@@ -202,9 +213,9 @@ class Orchestrator:
                                             "data": (
                                                 "You are an agent deciding the next step or tool call based on the current node.\n"
                                                 "Output strictly one JSON object with a single decision. Valid shapes:\n"
-                                                "- MOVE: {\"action\":\"MOVE\",\"step_id\":<one of allowed targets>}\n"
-                                                "- TOOL_CALL: {\"action\":\"TOOL_CALL\",\"tool_call\":{\"tool_name\":<name>,\"tool_kwargs\":{...}}}\n"
-                                                "- RESPOND: {\"action\":\"RESPOND\",\"response\":<text>}\n"
+                                                '- MOVE: {"action":"MOVE","step_id":<one of allowed targets>}\n'
+                                                '- TOOL_CALL: {"action":"TOOL_CALL","tool_call":{"tool_name":<name>,"tool_kwargs":{...}}}\n'
+                                                '- RESPOND: {"action":"RESPOND","response":<text>}\n'
                                                 "No commentary, no markdown, no code fences."
                                             ),
                                         }
@@ -213,15 +224,25 @@ class Orchestrator:
                                 assistant_msg = {
                                     "role": "assistant",
                                     "content": [
-                                        {"type": "text", "data": f"Current node: {current_node_id}"},
-                                        {"type": "text", "data": "Allowed targets:\n" + edges_txt},
-                                        {"type": "text", "data": f"Tools available: {tools_list}"},
+                                        {
+                                            "type": "text",
+                                            "data": f"Current node: {current_node_id}",
+                                        },
+                                        {
+                                            "type": "text",
+                                            "data": "Allowed targets:\n" + edges_txt,
+                                        },
+                                        {
+                                            "type": "text",
+                                            "data": f"Tools available: {tools_list}",
+                                        },
                                     ],
                                 }
                                 msgs = [sys_msg, assistant_msg] + msgs
                             except Exception:
                                 msgs = list(messages_base)
                         decision_data = None
+                    done = False
                     async for frame in eff_provider.stream_decision(  # type: ignore[union-attr]
                         msgs, schema=payload.get("schema")
                     ):
@@ -371,7 +392,11 @@ class Orchestrator:
                                         session_event = SessionEvent(
                                             session_id=session_id,
                                             type=tframe["type"],
-                                            data={k: v for k, v in tframe.items() if k != "type"},
+                                            data={
+                                                k: v
+                                                for k, v in tframe.items()
+                                                if k != "type"
+                                            },
                                             node_id=current_node_id,
                                         )
                                         await self._append(session_id, [session_event])
@@ -389,7 +414,9 @@ class Orchestrator:
                                                     {
                                                         "type": "text",
                                                         "data": f"TOOL_RESULT {tool_name}: "
-                                                        + _json.dumps(last_result)[:1000],
+                                                        + _json.dumps(last_result)[
+                                                            :1000
+                                                        ],
                                                     }
                                                 ],
                                             }
@@ -420,6 +447,9 @@ class Orchestrator:
                                     self._current_node[session_id] = to_id
                             # End after one decision turn per input
                         # End after one decision turn per input (multi-turn handled by client or future loop)
+                        if decision_data and decision_data.get("action") == "RESPOND":
+                            done = True
+                    if done:
                         break
             except Exception as exc:  # noqa: BLE001
                 await self._append(
@@ -434,9 +464,12 @@ class Orchestrator:
                 )
                 inc(EventType.ERROR_OCCURRED.value)
 
-    async def control(self, session_id: str, command: Union[ControlCommand, Dict[str, Any]]) -> None:
+    async def control(
+        self, session_id: str, command: Union[ControlCommand, Dict[str, Any]]
+    ) -> None:
         if isinstance(command, dict):
             command = ControlCommand.model_validate(command)
+        assert isinstance(command, ControlCommand)
         ctype = command.type
         if ctype == "cancel.requested":
             self._cancel_flags[session_id] = True
@@ -461,6 +494,7 @@ class Orchestrator:
             self._resume_events[session_id].set()
         elif ctype == "checkpoint.requested":
             from .schemas import Checkpoint
+
             cid = command.id or str(uuid.uuid4())
             cp = Checkpoint(id=cid, node_id=self._current_node.get(session_id))
             await self._checkpoint_store.save(session_id, cp)
@@ -477,10 +511,10 @@ class Orchestrator:
             inc(EventType.CHECKPOINT_CREATED.value)
             return
         elif ctype == "checkpoint.restore":
-            cid = command.id
-            if not cid:
+            cid_restore: Optional[str] = command.id
+            if not cid_restore:
                 raise ValueError("checkpoint.restore requires 'id'")
-            cp = await self._checkpoint_store.load(session_id, cid)
+            cp = await self._checkpoint_store.load(session_id, cid_restore)
             self._current_node[session_id] = cp.node_id
             await self._append(
                 session_id,
@@ -488,7 +522,7 @@ class Orchestrator:
                     SessionEvent(
                         session_id=session_id,
                         type=EventType.CHECKPOINT_RESTORED.value,
-                                                data={"id": cid, "node_id": cp.node_id},
+                        data={"id": cid_restore, "node_id": cp.node_id},
                     )
                 ],
             )
@@ -508,12 +542,15 @@ class Orchestrator:
         inc(EventType.CONTROL_APPLIED.value)
 
     async def stream(
-        self, session_id: str, inputs: Optional[Union[SessionInput, Dict[str, Any]]] = None
+        self,
+        session_id: str,
+        inputs: Optional[Union[SessionInput, Dict[str, Any]]] = None,
     ) -> AsyncIterator[Dict[str, Any]]:
         # If initial inputs provided, enqueue them first
         if inputs:
             if isinstance(inputs, dict):
                 inputs = SessionInput.model_validate(inputs)
+            assert isinstance(inputs, SessionInput)
             await self.input(session_id, inputs)
 
         # Ensure a worker is running for this session to process queued inputs

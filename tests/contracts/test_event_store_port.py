@@ -12,9 +12,13 @@ async def test_event_store_append_and_subscribe():
 
     async def producer():
         await asyncio.sleep(0.01)
-        await store.append(session_id, [SessionEvent(session_id=session_id, type="x", data={"i": 1})])
+        await store.append(
+            session_id, [SessionEvent(session_id=session_id, type="x", data={"i": 1})]
+        )
         await asyncio.sleep(0.01)
-        await store.append(session_id, [SessionEvent(session_id=session_id, type="y", data={"i": 2})])
+        await store.append(
+            session_id, [SessionEvent(session_id=session_id, type="y", data={"i": 2})]
+        )
 
     async def consumer():
         events = []

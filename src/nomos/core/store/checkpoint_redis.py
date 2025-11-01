@@ -6,8 +6,6 @@ Not used in CI; import will fail unless redis client is available.
 
 from __future__ import annotations
 
-import json
-from typing import Any, Dict
 
 from nomos.core.schemas import Checkpoint
 

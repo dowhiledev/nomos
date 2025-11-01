@@ -53,7 +53,7 @@ DecisionPayload = Union[RespondPayload, ToolCallPayload]
 
 class Checkpoint(BaseModel):
     """Checkpoint data for session state persistence."""
-    
+
     id: str
     node_id: Optional[str] = None
     data: Dict[str, Any] = Field(default_factory=dict)
@@ -61,17 +61,17 @@ class Checkpoint(BaseModel):
 
 class SessionInput(BaseModel):
     """Input data for session processing."""
-    
+
     messages: List[Union[Message, Dict[str, Any]]] = Field(default_factory=list)
     schema: Optional[ProviderSchema] = None
-    
+
     class Config:
         extra = "allow"
 
 
 class ControlCommand(BaseModel):
     """Control commands for session management."""
-    
+
     type: str
     id: Optional[str] = None
 

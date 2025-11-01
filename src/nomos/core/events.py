@@ -40,16 +40,14 @@ class SessionEvent(BaseModel):
 class TokenFrame(BaseModel):
     """Typed frame for token streaming from provider adapters."""
 
-    type: Literal[EventType.TOKEN_EMITTED.value] = EventType.TOKEN_EMITTED.value
+    type: Literal["io.token"] = "io.token"
     data: Dict[str, Any]
 
 
 class DecisionFrame(BaseModel):
     """Typed frame for final provider decisions (RESPOND or TOOL_CALL)."""
 
-    type: Literal[EventType.DECISION_COMPLETED.value] = (
-        EventType.DECISION_COMPLETED.value
-    )
+    type: Literal["decision.completed"] = "decision.completed"
     data: Dict[str, Any]
 
 

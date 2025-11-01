@@ -19,7 +19,7 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Dict
 from concurrent.futures import ProcessPoolExecutor
 from nomos.core.ports import ToolRunnerPort
 from nomos.core.tool_events import validate_tool_frame
-from nomos.core.types import ToolContext, ToolFrameType, ToolArgs
+from nomos.core.types import ToolFrameType, ToolArgs
 
 
 ToolCallable = Callable[..., Any]
@@ -48,7 +48,7 @@ class SimpleToolRunner(ToolRunnerPort):
             self._proc_pool = ProcessPoolExecutor(max_workers=processes)
 
     async def run(
-        self, tool_name: str, args: ToolArgs, ctx: ToolContext
+        self, tool_name: str, args: ToolArgs, ctx: Dict[str, Any]
     ) -> AsyncIterator[ToolFrameType]:
         # ACL check
         if self._allowed is not None and tool_name not in self._allowed:

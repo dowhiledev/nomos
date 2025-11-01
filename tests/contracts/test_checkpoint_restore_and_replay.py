@@ -19,11 +19,13 @@ async def test_checkpoint_restore_and_replay_projection():
     session = await orch.create_session()
     # checkpoint created at initial node (None)
     await orch.control(
-        session_id=session.id, command=ControlCommand(type="checkpoint.requested", id="cp1")
+        session_id=session.id,
+        command=ControlCommand(type="checkpoint.requested", id="cp1"),
     )
     # restore checkpoint
     await orch.control(
-        session_id=session.id, command=ControlCommand(type="checkpoint.restore", id="cp1")
+        session_id=session.id,
+        command=ControlCommand(type="checkpoint.restore", id="cp1"),
     )
 
     # materialized state

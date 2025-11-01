@@ -53,7 +53,7 @@ class AgentSpec(BaseModel):
                 raise ValueError(f"duplicate edge detected: {key}")
             seen.add(key)
         # reachability from start
-        adj = {}
+        adj: dict[str, list[str]] = {}
         for nid in node_ids:
             adj[nid] = []
         for e in self.edges:

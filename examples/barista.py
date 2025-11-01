@@ -5,19 +5,18 @@ It uses a graph-based workflow with OpenAI for natural language understanding.
 """
 
 import asyncio
-import os
-from typing import Any, AsyncIterator, Dict, List
+from typing import Any, Dict
 
 from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
 
 from nomos.core import Orchestrator
 from nomos.core.events import EventType
 from nomos.graph import Graph, LLMNode, Edge
 from nomos.tools.runner import SimpleToolRunner
 from nomos.llms.openai_provider import OpenAIProvider
+
+# Load environment variables
+load_dotenv()
 
 # In-memory state (demo only)
 _cart: list[dict] = []
@@ -67,16 +66,32 @@ async def main() -> None:
     g = (
         Graph(name="barista")
         .add(
-            LLMNode(id="greeting", prompt="Greet the customer warmly and ask how you can help them today. Use the get.options tool to get familiar with available options.", tools=["get.options"]),
+            LLMNode(
+                id="greeting",
+                prompt="Greet the customer warmly and ask how you can help them today. Use the get.options tool to get familiar with available options.",
+                tools=["get.options"],
+            ),
             LLMNode(
                 id="order_entry",
                 prompt="Help the customer build their order. Ask for coffee preference and size. Use get.options to check availability. Use add.to.cart when customer confirms.",
                 tools=["get.options", "add.to.cart", "clear.cart"],
             ),
-            LLMNode(id="order_review", prompt="Review the order and total using get.summary. Ask if ready to pay.", tools=["get.summary"]),
-            LLMNode(id="payment_processing", prompt="Process payment using finalize.order.", tools=["finalize.order"]),
+            LLMNode(
+                id="order_review",
+                prompt="Review the order and total using get.summary. Ask if ready to pay.",
+                tools=["get.summary"],
+            ),
+            LLMNode(
+                id="payment_processing",
+                prompt="Process payment using finalize.order.",
+                tools=["finalize.order"],
+            ),
             LLMNode(id="order_completed", prompt="Thank the customer and end session."),
-            LLMNode(id="order_cancelled", prompt="Cancel order and clear cart.", tools=["clear.cart"]),
+            LLMNode(
+                id="order_cancelled",
+                prompt="Cancel order and clear cart.",
+                tools=["clear.cart"],
+            ),
             LLMNode(id="session_end", prompt="End session.", tools=["clear.cart"]),
         )
         .edge(
@@ -144,14 +159,16 @@ async def main() -> None:
 
     # Use OpenAI provider
     provider = OpenAIProvider()
-    orch = Orchestrator(agent=spec, provider=provider, tool_runner=runner, node_overrides=node_overrides)
+    orch = Orchestrator(
+        agent=spec, provider=provider, tool_runner=runner, node_overrides=node_overrides
+    )
     s = await orch.create_session()
 
     print("Welcome to Nomos Barista! Type /quit to exit, /pause, /resume, /cancel.")
 
     # Start with initial decision at greeting
     await orch.input(session_id=s.id, inputs={"messages": []})
-    
+
     # Process initial greeting
     async for ev in orch.stream(session_id=s.id):
         t = ev.get("type")
@@ -179,7 +196,11 @@ async def main() -> None:
                                     {
                                         "type": "text",
                                         "data": f"TOOL_RESULT {tool_name}: "
-                                        + (str(result)[:1000] if result is not None else "done"),
+                                        + (
+                                            str(result)[:1000]
+                                            if result is not None
+                                            else "done"
+                                        ),
                                     }
                                 ],
                             }
@@ -202,10 +223,14 @@ async def main() -> None:
                 await orch.control(session_id=s.id, command={"type": "pause.requested"})
                 continue
             if line == "/resume":
-                await orch.control(session_id=s.id, command={"type": "resume.requested"})
+                await orch.control(
+                    session_id=s.id, command={"type": "resume.requested"}
+                )
                 continue
             if line == "/cancel":
-                await orch.control(session_id=s.id, command={"type": "cancel.requested"})
+                await orch.control(
+                    session_id=s.id, command={"type": "cancel.requested"}
+                )
                 continue
 
             # Send user input
@@ -247,7 +272,11 @@ async def main() -> None:
                                             {
                                                 "type": "text",
                                                 "data": f"TOOL_RESULT {tool_name}: "
-                                                + (str(result)[:1000] if result is not None else "done"),
+                                                + (
+                                                    str(result)[:1000]
+                                                    if result is not None
+                                                    else "done"
+                                                ),
                                             }
                                         ],
                                     }
