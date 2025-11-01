@@ -68,7 +68,7 @@ Spike 5 — Graph Runtime MVP (Nodes Only)
   - Graph builder with validation (no dangling nodes; legal conditions)
   - Compile to Agent (serializable definition)
   - Example parity with `examples/conceptual_agent/graph.py`
- - Status: In progress (minimal AgentSpec with MOVE routing; next: validation, additional conditions, compile helpers)
+ - Status: In progress (minimal AgentSpec with MOVE routing; validation + compile helper DSL added; next: expand conditions)
 
 Spike 6 — Checkpointing + Replay
 - Goals: Deterministic recovery; event-log → state reconstruction; node-boundary checkpoints.
