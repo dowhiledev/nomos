@@ -21,7 +21,7 @@ from typing import Any, AsyncIterator, Dict, Optional
 from .events import EventType, SessionEvent
 from .state import SessionState
 from .store.memory import InMemoryEventStore
-from .ports import LLMProviderPort
+from .ports import LLMProviderPort, ToolRunnerPort
 
 
 @dataclass
@@ -36,10 +36,12 @@ class Orchestrator:
         *,
         store: Optional[InMemoryEventStore] = None,
         provider: Optional[LLMProviderPort] = None,
+        tool_runner: Optional[ToolRunnerPort] = None,
     ) -> None:
         self._agent = agent
         self._store = store or InMemoryEventStore()
         self._provider = provider
+        self._tool_runner = tool_runner
         self._input_queues: Dict[str, asyncio.Queue[Dict[str, Any]]] = {}
         self._workers: Dict[str, asyncio.Task] = {}
 
@@ -119,6 +121,31 @@ class Orchestrator:
                                 ).model_dump()
                             ],
                         )
+                        # If decision calls a tool, handle via tool runner
+                        data = frame.get("data", {}) or {}
+                        action = data.get("action")
+                        if action == "TOOL_CALL":
+                            tool_call = data.get("tool_call", {}) or {}
+                            tool_name = tool_call.get("tool_name")
+                            tool_kwargs = tool_call.get("tool_kwargs", {})
+                            if not self._tool_runner or not tool_name:
+                                await self._store.append(
+                                    session_id,
+                                    [
+                                        SessionEvent(
+                                            session_id=session_id,
+                                            type=EventType.ERROR_OCCURRED.value,
+                                            data={
+                                                "message": "tool runner not configured or invalid tool call",
+                                                "tool_call": tool_call,
+                                            },
+                                        ).model_dump()
+                                    ],
+                                )
+                                break
+                            # Stream tool frames
+                            async for tframe in self._tool_runner.run(tool_name, tool_kwargs, {}):
+                                await self._store.append(session_id, [tframe])
                         break
             except Exception as exc:  # noqa: BLE001
                 await self._store.append(
