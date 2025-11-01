@@ -84,6 +84,9 @@ class Orchestrator:
         )
         inc(EventType.INPUT_ENQUEUED.value)
         await self._input_queues[session_id].put(inputs)
+        # Ensure a worker is running to process this input
+        if session_id not in self._workers:
+            self._workers[session_id] = asyncio.create_task(self._worker(session_id))
 
     async def _worker(self, session_id: str) -> None:
         """Process queued inputs for a session using the provider (if available)."""
@@ -143,6 +146,8 @@ class Orchestrator:
                                 ],
                             )
                             inc(EventType.TOKEN_EMITTED.value)
+                            # continue streaming provider frames
+                            continue
                         elif ftype == EventType.DECISION_COMPLETED.value:
                             await self._store.append(
                                 session_id,
@@ -187,27 +192,27 @@ class Orchestrator:
                                             break
                                         await self._store.append(session_id, [tframe])
                                         inc(tframe.get("type", "tool.frame"))
-                        # Handle routing (MOVE)
-                        if isinstance(self._agent, AgentSpec) and action == "MOVE":
-                            to_id = self._agent.route(self._current_node.get(session_id) or "", data)  # type: ignore[arg-type]
-                            if to_id:
-                                await self._store.append(
-                                    session_id,
-                                    [
-                                        SessionEvent(
-                                            session_id=session_id,
-                                            type=EventType.ROUTING_APPLIED.value,
-                                            data={
-                                                "from": self._current_node.get(session_id),
-                                                "to": to_id,
-                                                "condition": f"MOVE:{data.get('step_id')}",
-                                            },
-                                        ).model_dump()
-                                    ],
-                                )
-                                inc(EventType.ROUTING_APPLIED.value)
-                                self._current_node[session_id] = to_id
-                        break
+                            # Handle routing (MOVE) only on decision frame
+                            if isinstance(self._agent, AgentSpec) and action == "MOVE":
+                                to_id = self._agent.route(self._current_node.get(session_id) or "", data)  # type: ignore[arg-type]
+                                if to_id:
+                                    await self._store.append(
+                                        session_id,
+                                        [
+                                            SessionEvent(
+                                                session_id=session_id,
+                                                type=EventType.ROUTING_APPLIED.value,
+                                                data={
+                                                    "from": self._current_node.get(session_id),
+                                                    "to": to_id,
+                                                    "condition": f"MOVE:{data.get('step_id')}",
+                                                },
+                                            ).model_dump()
+                                        ],
+                                    )
+                                    inc(EventType.ROUTING_APPLIED.value)
+                                    self._current_node[session_id] = to_id
+                            break
             except Exception as exc:  # noqa: BLE001
                 await self._store.append(
                     session_id,
@@ -317,3 +322,7 @@ class Orchestrator:
             state.current_node = self._current_node.get(session_id)
         state.history_tail = tail
         return state.model_dump()
+
+    async def list_events(self, session_id: str) -> list[dict]:  # noqa: ANN401
+        """Return the full event list for a session (for debugging/transport)."""
+        return await self._store.read_by_session(session_id)

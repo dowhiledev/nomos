@@ -7,15 +7,31 @@ No placeholder classes here; imports assume vNext APIs exist.
 from __future__ import annotations
 
 import asyncio
-from typing import Dict
+from typing import Any, AsyncIterator, Dict, List
 
 from nomos.core import Orchestrator  # provided by vNext
-from .graph import make_agent
+from nomos.core.events import EventType
+from nomos.tools.runner import SimpleToolRunner
+from examples.conceptual_agent.tools import web_search
+
+
+class DemoProvider:
+    async def stream_decision(self, messages: List[Dict[str, Any]], schema: Any) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
+        # Emit a token and then ask to call the web.search tool
+        yield {"type": EventType.TOKEN_EMITTED.value, "data": {"role": "assistant", "delta": "Working... "}}
+        yield {
+            "type": EventType.DECISION_COMPLETED.value,
+            "data": {
+                "action": "TOOL_CALL",
+                "tool_call": {"tool_name": "web.search", "tool_kwargs": {"query": "Tokyo budget itinerary", "top_k": 3}},
+            },
+        }
+        # After tool completes, provider would normally be called again. For demo, finish here.
 
 
 async def main() -> None:
-    agent = make_agent()
-    orch = Orchestrator(agent)
+    # No graph routing needed for MVP demo; focus on streaming + tool call
+    orch = Orchestrator(agent=None, provider=DemoProvider(), tool_runner=SimpleToolRunner({"web.search": web_search}))
 
     # Multimodal input: text + image
     inputs = {
@@ -31,18 +47,17 @@ async def main() -> None:
     }
 
     session = await orch.create_session()
-    sent_cancel = False
-    # Core handles routing/observability; user prints tokens and interrupts when needed
+    # Core handles routing/observability; user prints tokens, tool frames, and decision
     async for evt in orch.stream(session_id=session.id, inputs=inputs):
-        if evt["type"] == "io.token":
+        if evt["type"] == EventType.TOKEN_EMITTED.value:
             print(evt["data"].get("delta"), end="", flush=True)
-            if not sent_cancel:
-                await orch.control(session_id=session.id, command={"type": "cancel.requested"})
-                sent_cancel = True
         elif evt["type"].startswith("tool."):
             print("\n", evt)
-        elif evt["type"] == "decision.completed":
+            if evt["type"] == "tool.completed":
+                break
+        elif evt["type"] == EventType.DECISION_COMPLETED.value:
             print("\n[done]", evt["data"]) 
+            break
 
 
 if __name__ == "__main__":

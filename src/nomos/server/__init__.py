@@ -47,7 +47,20 @@ def create_app(agent: Optional[AgentSpec] = None, *, orchestrator: Optional[Orch
     async def get_state(sid: str) -> Dict[str, Any]:  # noqa: ANN401
         return await orch.materialize_state(session_id=sid)
 
+    @app.get("/v2/sessions/{sid}/timeline")
+    async def get_timeline(sid: str) -> Dict[str, Any]:  # noqa: ANN401
+        events = await orch.list_events(session_id=sid)
+        return {"session_id": sid, "events": events}
+
     async def _sse_gen(sid: str) -> AsyncIterator[str]:
+        # Yield existing timeline first so clients see immediate data
+        try:
+            existing = await orch.list_events(session_id=sid)
+        except Exception:
+            existing = []
+        for ev in existing:
+            yield f"data: {json.dumps(ev)}\n\n"
+        # Then stream new events
         async for ev in orch.stream(session_id=sid):
             yield f"data: {json.dumps(ev)}\n\n"
 
@@ -89,4 +102,3 @@ def create_app(agent: Optional[AgentSpec] = None, *, orchestrator: Optional[Orch
 
 
 __all__ = ["create_app"]
-
