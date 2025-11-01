@@ -10,9 +10,23 @@ Core Principles
 - Event-sourced core with async streaming, interrupts, cancellation, and deterministic replay/checkpoints.
 - Library-first usage; server (SSE/WS/gRPC) is optional transport. Core owns event routing/observability.
 
-Prioritized Spikes (No timelines; each yields concrete deliverables)
+Alignment With DDD + Hexagonal + ES/CQRS
+- Follow .ddd artifacts as the source of truth for ubiquitous language, contexts, aggregates, commands/events, and ports.
+- Treat each Session orchestrator as an actor handling commands and emitting events to an append‑only log.
+- Define ports first, backed by contract tests, then deliver adapters over time.
 
-Spike 1 — Event Schema + Orchestrator Skeleton
+Milestones & Spikes (No timelines; each yields concrete deliverables)
+
+Milestone 0 — DDD Foundations (documentation only)
+- Goals: Establish domain language and boundaries; stabilize event names and port surfaces.
+- Deliverables:
+  - .ddd/DOMAIN_GLOSSARY.md, BOUNDED_CONTEXTS.md, AGGREGATES.md (done)
+  - .ddd/COMMANDS.md, DOMAIN_EVENTS.md, USE_CASES.md (done)
+  - .ddd/PORTS_AND_ADAPTERS.md, OBSERVABILITY.md, SECURITY_AND_GOVERNANCE.md (done)
+  - ADR/0001-architecture-style.md (done)
+- Exit Criteria: Stakeholder sign‑off on events, commands, and initial ports.
+
+Spike 1 — Event Schema + Orchestrator Skeleton (actor)
 - Goals: Canonical event envelope; minimal orchestrator loop with create_session/stream/control/state.
 - Scope: Pydantic models for SessionEvent/State; in-memory append-only log; simple state projection.
 - Deliverables:
@@ -21,21 +35,28 @@ Spike 1 — Event Schema + Orchestrator Skeleton
   - In-memory event store + projection module
   - Minimal dev harness (CLI entry) for local streaming
 
-Spike 2 — Async LLM Streaming Adapters (OpenAI, Groq)
+Spike 2 — Port Contracts + Contract Tests
+- Goals: Lock the behavior of ports before adapters (providers/tools/stores/transports).
+- Scope: Define `LLMProviderPort`, `ToolRunnerPort`, `EventStorePort`, `CheckpointStorePort`, `TransportPort`, Metrics/Tracing.
+- Deliverables:
+  - Contract tests (fixtures + fake adapters) verifying streaming, cancellation, and error semantics
+  - Port docs linked back to .ddd/PORTS_AND_ADAPTERS.md
+
+Spike 3 — Async LLM Streaming Adapters (OpenAI, Groq)
 - Goals: Unified async streaming interface for token/decision output.
 - Scope: `stream_decision(messages, schema)` + `stream_generate(messages)`; function/tool-calling parity; error handling.
 - Deliverables:
   - Provider shims (openai, groq) with typed outputs
   - Conformance tests (token stream, finish reasons, errors)
 
-Spike 3 — Tool Runner 2.0 (Async, Progress, Cancellation)
+Spike 4 — Tool Runner 2.0 (Async, Progress, Cancellation)
 - Goals: Async tool contract with progress/partial outputs; budgets/timeouts; safe execution.
 - Scope: `@tool` decorator; async generator tools; cancellation tokens; subprocess/threadpool isolation hooks.
 - Deliverables:
   - `nomos-tools` runner; progress events (`tool.started|progress|stdout|completed|error`)
   - Budget/timeout enforcement; structured errors; unit tests
 
-Spike 4 — Graph Runtime MVP (Nodes Only)
+Spike 5 — Graph Runtime MVP (Nodes Only)
 - Goals: Compose nodes and edges; compile() → Agent; execute via orchestrator.
 - Scope: `Graph`, `LLMNode`, `Edge` API; node-level overrides (LLM/tools/memory); cycles allowed.
 - Deliverables:
@@ -43,14 +64,14 @@ Spike 4 — Graph Runtime MVP (Nodes Only)
   - Compile to Agent (serializable definition)
   - Example parity with `examples/conceptual_agent/graph.py`
 
-Spike 5 — Checkpointing + Replay
+Spike 6 — Checkpointing + Replay
 - Goals: Deterministic recovery; event-log → state reconstruction; node-boundary checkpoints.
 - Scope: Pluggable stores (memory, Redis, Postgres); checkpoint creation/restore APIs.
 - Deliverables:
   - Checkpointer plugin interface + Redis/Postgres implementations (JSONB)
   - Replay utility for timeline → state
 
-Spike 6 — SSE/WS Server + TS SDK v2
+Spike 7 — SSE/WS Server + TS SDK v2 (duplex)
 - Goals: Optional transport to consume events and control sessions remotely.
 - Scope: HTTP: create/input/control/state; SSE events; WS bi-directional sessions (send inputs + receive events);
   TS SDK client with types and duplex helpers.
@@ -58,53 +79,69 @@ Spike 6 — SSE/WS Server + TS SDK v2
   - `nomos-server` with `/v2` endpoints
   - `nomos-sdk-ts` streaming client; examples
 
-Spike 7 — Interrupt Controller + Prioritization
+Spike 8 — Interrupt Controller + Prioritization
 - Goals: Barge-in, pause/resume/cancel; backpressure policies.
 - Scope: Priority queues; cooperative cancellation across LLM/tools; control commands; policies.
 - Deliverables:
   - Controller module; tests simulating interrupts mid-stream and mid-tool
 
-Spike 8 — Multimodal I/O (Core Contracts)
+Spike 9 — Multimodal I/O (Core Contracts)
 - Goals: Content-part model; image/audio support in messages/events.
 - Scope: Content parts (text/image/audio) normalization; payload chunking; optional media adapters (STT/TTS) later.
 - Deliverables:
   - Content model + adapters in providers; tests with simple image prompts
 
-Spike 9 — Subgraphs + Agent-as-Tool
+Spike 10 — Subgraphs + Agent-as-Tool
 - Goals: Specialization via nested agents; robust adapter to call an Agent like a tool.
 - Scope: as_tool adapter; subgraph lifecycle; resource quotas.
 - Deliverables:
   - Agent-as-tool wrapper + tests; subgraph example aligned with conceptual sample
 
-Spike 10 — Observability (Tracing, Metrics, Timeline)
+Spike 11 — Observability (Tracing, Metrics, Timeline)
 - Goals: OTEL spans at node/event granularity; metrics; timeline explorer hooks.
 - Scope: Span/link strategy; exporters; sampling; correlation IDs.
 - Deliverables:
   - `nomos-observe` setup helpers; default spans around LLM/tool/orchestrator; metrics counters/histograms
 
-Spike 11 — Performance + Scaling
+Spike 12 — Performance + Scaling
 - Goals: Concurrency tuning; worker pools; backpressure and rate limits.
 - Scope: LLM/tool worker executors; session sharding; token drop strategies for lagging clients.
 - Deliverables:
   - Benchmarks; config knobs; documentation
 
-Spike 12 — Security + Governance
+Spike 13 — Security + Governance
 - Goals: Transport auth (JWT/OIDC); rate limiting; tool permissioning; secrets policy.
 - Scope: Server middleware; per-tool ACLs; redaction pipelines for event storage.
 - Deliverables:
   - Security middleware; tool registry permissions; redaction utilities
 
-Spike 13 — Developer Experience (CLI, Docs, Examples)
+Spike 14 — Developer Experience (CLI, Docs, Examples)
 - Goals: `nomos dev` hot-reload; templates; improved examples and docs.
 - Scope: Reload graph/nodes; local SSE/WS; docs site updates.
 - Deliverables:
   - Dev CLI; refreshed examples; quickstarts
 
-Spike 14 — Config / No‑Code Builder (Later)
+Spike 15 — Config / No‑Code Builder (Later)
 - Goals: Optional config compiler generating code from YAML/JSON; UI builder on the same contracts.
 - Scope: Schema; codegen; import/export of graphs.
 - Deliverables:
   - Config compiler; sample UI (“Nomos Compose”) hooks
+
+Milestone Grouping & Exit Criteria
+- M1 Foundations (0,1,2): DDD docs signed off; event schema stable; ports defined and contract‑tested.
+  - Exit: At least one fake provider/tool passes contract tests; in‑memory event store usable.
+- M2 Runtime MVP (3,4,5): Provider + Tool runner + Graph compile integrated with actor orchestrator.
+  - Exit: Conceptual example runs locally with streaming and a simple tool call.
+- M3 Transport & SDK (6,7): Server endpoints + TS SDK (duplex) operational.
+  - Exit: Curl/SDK can create session, stream SSE/WS, send inputs and control; e2e demo.
+- M4 Multimodal & Interrupts (8,9): Content‑parts and robust interrupt controller.
+  - Exit: Image prompt works; mid‑token and mid‑tool cancel tested.
+- M5 Specialization & Observability (10,11): Subgraphs + agent‑as‑tool; tracing/metrics.
+  - Exit: Specialist sub‑agent example; spans and metrics visible.
+- M6 Scale & Security (12,13): Performance + limits + auth/permissions/redaction.
+  - Exit: Basic load benchmark meets SLO; auth and tool ACLs enforced.
+- M7 DX & Config (14,15): Dev CLI; optional config pipeline.
+  - Exit: `nomos dev` hot‑reload usable; config compiler baseline.
 
 Acceptance Checks (per spike)
 - Unit/integration tests for new surfaces; examples updated to use the new APIs.
