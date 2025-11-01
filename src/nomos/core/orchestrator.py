@@ -24,6 +24,7 @@ from .store.memory import InMemoryEventStore
 from .store.checkpoint_memory import InMemoryCheckpointStore
 from .ports import LLMProviderPort, ToolRunnerPort
 from nomos.graph import AgentSpec
+from .observe import inc, span
 
 
 @dataclass
@@ -69,6 +70,7 @@ class Orchestrator:
                 SessionEvent(session_id=sid, type=EventType.SESSION_CREATED.value, data={}).model_dump(),
             ],
         )
+        inc(EventType.SESSION_CREATED.value)
         return _Session(id=sid)
 
     async def input(self, session_id: str, inputs: Dict[str, Any]) -> None:  # noqa: ANN401
@@ -80,6 +82,7 @@ class Orchestrator:
                 ).model_dump(),
             ],
         )
+        inc(EventType.INPUT_ENQUEUED.value)
         await self._input_queues[session_id].put(inputs)
 
     async def _worker(self, session_id: str) -> None:
@@ -102,6 +105,7 @@ class Orchestrator:
                         ).model_dump(),
                     ],
                 )
+                inc(EventType.DECISION_STARTED.value)
                 if not self._provider:
                     # No provider wired: emit a trivial completion
                     await self._store.append(
@@ -114,68 +118,75 @@ class Orchestrator:
                             ).model_dump()
                         ],
                     )
+                    inc(EventType.DECISION_COMPLETED.value)
                     continue
 
                 # Stream decision from provider; provider yields generic frames
-                async for frame in self._provider.stream_decision(payload.get("messages", []), schema=None):
-                    # Check pause between frames
-                    await self._resume_events[session_id].wait()
-                    # Cancel at token/tool boundaries
-                    if self._cancel_flags.get(session_id):
-                        self._cancel_flags[session_id] = False
-                        break
-                    ftype = frame.get("type")
-                    if ftype == EventType.TOKEN_EMITTED.value:
-                        await self._store.append(
-                            session_id,
-                            [
-                                SessionEvent(
-                                    session_id=session_id,
-                                    type=EventType.TOKEN_EMITTED.value,
-                                    data=frame.get("data", {}),
-                                ).model_dump()
-                            ],
-                        )
-                    elif ftype == EventType.DECISION_COMPLETED.value:
-                        await self._store.append(
-                            session_id,
-                            [
-                                SessionEvent(
-                                    session_id=session_id,
-                                    type=EventType.DECISION_COMPLETED.value,
-                                    data=frame.get("data", {}),
-                                    node_id=self._current_node.get(session_id),
-                                ).model_dump()
-                            ],
-                        )
-                        # If decision calls a tool, handle via tool runner
-                        data = frame.get("data", {}) or {}
-                        action = data.get("action")
-                        if action == "TOOL_CALL":
-                            tool_call = data.get("tool_call", {}) or {}
-                            tool_name = tool_call.get("tool_name")
-                            tool_kwargs = tool_call.get("tool_kwargs", {})
-                            if not self._tool_runner or not tool_name:
-                                await self._store.append(
-                                    session_id,
-                                    [
-                                        SessionEvent(
-                                            session_id=session_id,
-                                            type=EventType.ERROR_OCCURRED.value,
-                                            data={
-                                                "message": "tool runner not configured or invalid tool call",
-                                                "tool_call": tool_call,
-                                            },
-                                        ).model_dump()
-                                    ],
-                                )
-                                break
-                            # Stream tool frames
-                            async for tframe in self._tool_runner.run(tool_name, tool_kwargs, {}):
-                                if self._cancel_flags.get(session_id):
-                                    self._cancel_flags[session_id] = False
+                with span("provider.stream_decision"):
+                    async for frame in self._provider.stream_decision(payload.get("messages", []), schema=None):
+                        # Check pause between frames
+                        await self._resume_events[session_id].wait()
+                        # Cancel at token/tool boundaries
+                        if self._cancel_flags.get(session_id):
+                            self._cancel_flags[session_id] = False
+                            break
+                        ftype = frame.get("type")
+                        if ftype == EventType.TOKEN_EMITTED.value:
+                            await self._store.append(
+                                session_id,
+                                [
+                                    SessionEvent(
+                                        session_id=session_id,
+                                        type=EventType.TOKEN_EMITTED.value,
+                                        data=frame.get("data", {}),
+                                    ).model_dump()
+                                ],
+                            )
+                            inc(EventType.TOKEN_EMITTED.value)
+                        elif ftype == EventType.DECISION_COMPLETED.value:
+                            await self._store.append(
+                                session_id,
+                                [
+                                    SessionEvent(
+                                        session_id=session_id,
+                                        type=EventType.DECISION_COMPLETED.value,
+                                        data=frame.get("data", {}),
+                                        node_id=self._current_node.get(session_id),
+                                    ).model_dump()
+                                ],
+                            )
+                            inc(EventType.DECISION_COMPLETED.value)
+                            # If decision calls a tool, handle via tool runner
+                            data = frame.get("data", {}) or {}
+                            action = data.get("action")
+                            if action == "TOOL_CALL":
+                                tool_call = data.get("tool_call", {}) or {}
+                                tool_name = tool_call.get("tool_name")
+                                tool_kwargs = tool_call.get("tool_kwargs", {})
+                                if not self._tool_runner or not tool_name:
+                                    await self._store.append(
+                                        session_id,
+                                        [
+                                            SessionEvent(
+                                                session_id=session_id,
+                                                type=EventType.ERROR_OCCURRED.value,
+                                                data={
+                                                    "message": "tool runner not configured or invalid tool call",
+                                                    "tool_call": tool_call,
+                                                },
+                                            ).model_dump()
+                                        ],
+                                    )
+                                    inc(EventType.ERROR_OCCURRED.value)
                                     break
-                                await self._store.append(session_id, [tframe])
+                                # Stream tool frames
+                                with span(f"tool.run:{tool_name}"):
+                                    async for tframe in self._tool_runner.run(tool_name, tool_kwargs, {}):
+                                        if self._cancel_flags.get(session_id):
+                                            self._cancel_flags[session_id] = False
+                                            break
+                                        await self._store.append(session_id, [tframe])
+                                        inc(tframe.get("type", "tool.frame"))
                         # Handle routing (MOVE)
                         if isinstance(self._agent, AgentSpec) and action == "MOVE":
                             to_id = self._agent.route(self._current_node.get(session_id) or "", data)  # type: ignore[arg-type]
@@ -194,6 +205,7 @@ class Orchestrator:
                                         ).model_dump()
                                     ],
                                 )
+                                inc(EventType.ROUTING_APPLIED.value)
                                 self._current_node[session_id] = to_id
                         break
             except Exception as exc:  # noqa: BLE001
@@ -207,6 +219,7 @@ class Orchestrator:
                         ).model_dump()
                     ],
                 )
+                inc(EventType.ERROR_OCCURRED.value)
 
     async def control(self, session_id: str, command: Dict[str, Any]) -> None:  # noqa: ANN401
         ctype = command.get("type")
@@ -220,6 +233,7 @@ class Orchestrator:
                     ).model_dump(),
                 ],
             )
+            inc(EventType.CANCEL_APPLIED.value)
             return
         if ctype == "pause.requested":
             self._resume_events[session_id].clear()
@@ -239,6 +253,7 @@ class Orchestrator:
                     ).model_dump(),
                 ],
             )
+            inc(EventType.CHECKPOINT_CREATED.value)
             return
         elif ctype == "checkpoint.restore":
             cid = command.get("id")
@@ -256,6 +271,7 @@ class Orchestrator:
                     ).model_dump(),
                 ],
             )
+            inc(EventType.CHECKPOINT_RESTORED.value)
             return
         # default: record control applied
         await self._store.append(
@@ -266,6 +282,7 @@ class Orchestrator:
                 ).model_dump(),
             ],
         )
+        inc(EventType.CONTROL_APPLIED.value)
 
     async def stream(
         self, session_id: str, inputs: Optional[Dict[str, Any]] = None  # noqa: ANN401
