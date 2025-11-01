@@ -16,7 +16,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from dataclasses import dataclass
-from typing import Any, AsyncIterator, Callable, Dict, Optional
+from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Union
 
 from .events import EventType, SessionEvent, TokenFrame, DecisionFrame
 from nomos.graph import AgentSpec
@@ -27,6 +27,7 @@ from .store.checkpoint_memory import InMemoryCheckpointStore
 from .ports import LLMProviderPort, ToolRunnerPort
 from .observe import inc, span, measure
 from .redaction import redact_mapping
+from .schemas import SessionInput, ControlCommand
 
 
 @dataclass
@@ -109,19 +110,19 @@ class Orchestrator:
         inc(EventType.SESSION_CREATED.value)
         return _Session(id=sid)
 
-    async def input(self, session_id: str, inputs: Dict[str, Any]) -> None:  # noqa: ANN401
+    async def input(self, session_id: str, inputs: SessionInput) -> None:
         await self._append(
             session_id,
             [
                 SessionEvent(
                     session_id=session_id,
                     type=EventType.INPUT_ENQUEUED.value,
-                    data=inputs,
+                    data=inputs.model_dump(),
                 ),
             ],
         )
         inc(EventType.INPUT_ENQUEUED.value)
-        await self._input_queues[session_id].put(inputs)
+        await self._input_queues[session_id].put(inputs.model_dump())
         # Ensure a worker is running to process this input
         if session_id not in self._workers:
             self._workers[session_id] = asyncio.create_task(self._worker(session_id))
@@ -423,8 +424,8 @@ class Orchestrator:
                 )
                 inc(EventType.ERROR_OCCURRED.value)
 
-    async def control(self, session_id: str, command: Dict[str, Any]) -> None:  # noqa: ANN401
-        ctype = command.get("type")
+    async def control(self, session_id: str, command: ControlCommand) -> None:
+        ctype = command.type
         if ctype == "cancel.requested":
             self._cancel_flags[session_id] = True
             # propagate to tools via cancel event (if in-flight)
@@ -448,7 +449,7 @@ class Orchestrator:
             self._resume_events[session_id].set()
         elif ctype == "checkpoint.requested":
             from .schemas import Checkpoint
-            cid = command.get("id") or str(uuid.uuid4())
+            cid = command.id or str(uuid.uuid4())
             cp = Checkpoint(id=cid, node_id=self._current_node.get(session_id))
             await self._checkpoint_store.save(session_id, cp)
             await self._append(
@@ -457,14 +458,14 @@ class Orchestrator:
                     SessionEvent(
                         session_id=session_id,
                         type=EventType.CHECKPOINT_CREATED.value,
-                        data={"id": cid, "node_id": cp["node_id"]},
+                        data={"id": cid, "node_id": cp.node_id},
                     )
                 ],
             )
             inc(EventType.CHECKPOINT_CREATED.value)
             return
         elif ctype == "checkpoint.restore":
-            cid = command.get("id")
+            cid = command.id
             if not cid:
                 raise ValueError("checkpoint.restore requires 'id'")
             cp = await self._checkpoint_store.load(session_id, cid)
@@ -488,17 +489,19 @@ class Orchestrator:
                 SessionEvent(
                     session_id=session_id,
                     type=EventType.CONTROL_APPLIED.value,
-                    data=command,
+                    data=command.model_dump(),
                 )
             ],
         )
         inc(EventType.CONTROL_APPLIED.value)
 
     async def stream(
-        self, session_id: str, inputs: Optional[Dict[str, Any]] = None
+        self, session_id: str, inputs: Optional[Union[SessionInput, Dict[str, Any]]] = None
     ) -> AsyncIterator[Dict[str, Any]]:
         # If initial inputs provided, enqueue them first
         if inputs:
+            if isinstance(inputs, dict):
+                inputs = SessionInput.model_validate(inputs)
             await self.input(session_id, inputs)
 
         # Ensure a worker is running for this session to process queued inputs
@@ -509,13 +512,12 @@ class Orchestrator:
         async for ev in self._store.subscribe(session_id):
             yield ev.model_dump()
 
-    async def materialize_state(self, session_id: str) -> Dict[str, Any]:  # noqa: ANN401
+    async def materialize_state(self, session_id: str) -> SessionState:
         events = await self._store.read_by_session(session_id)
         state = SessionState(session_id=session_id)
         # A minimal projection: track last action/token and maintain a small tail
-        tail = []
         for ev in events[-50:]:
-            tail.append(ev.model_dump())
+            state.history_tail.append(ev)
             if ev.type == EventType.DECISION_COMPLETED.value:
                 state.last_action = "decision.completed"
             if ev.type == EventType.TOKEN_EMITTED.value:
@@ -525,10 +527,8 @@ class Orchestrator:
         # if never routed, use initial
         if not state.current_node:
             state.current_node = self._current_node.get(session_id)
-        state.history_tail = tail
-        return state.model_dump()
+        return state
 
-    async def list_events(self, session_id: str) -> list[dict]:  # noqa: ANN401
+    async def list_events(self, session_id: str) -> List[SessionEvent]:
         """Return the full event list for a session (for debugging/transport)."""
-        events = await self._store.read_by_session(session_id)
-        return [ev.model_dump() for ev in events]
+        return await self._store.read_by_session(session_id)

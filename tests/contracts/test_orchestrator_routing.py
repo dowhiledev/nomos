@@ -40,4 +40,4 @@ async def test_orchestrator_applies_routing_and_updates_state():
     await consume()
     assert routed
     st = await orch.materialize_state(session_id=session.id)
-    assert st["current_node"] == "next"
+    assert st.current_node == "next"

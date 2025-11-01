@@ -21,6 +21,9 @@ from fastapi.responses import StreamingResponse
 
 from nomos.core import Orchestrator
 from nomos.core.observe import metrics_snapshot
+from nomos.core.schemas import SessionInput, ControlCommand
+from nomos.core.state import SessionState
+from nomos.core.events import SessionEvent
 from nomos.graph import AgentSpec
 
 
@@ -38,22 +41,25 @@ def create_app(
 
     @app.post("/v2/sessions/{sid}/input")
     async def post_input(sid: str, payload: Dict[str, Any]) -> Dict[str, Any]:  # noqa: ANN401
-        await orch.input(session_id=sid, inputs=payload)
+        inputs = SessionInput.model_validate(payload)
+        await orch.input(session_id=sid, inputs=inputs)
         return {"ok": True}
 
     @app.post("/v2/sessions/{sid}/control")
     async def post_control(sid: str, payload: Dict[str, Any]) -> Dict[str, Any]:  # noqa: ANN401
-        await orch.control(session_id=sid, command=payload)
+        command = ControlCommand.model_validate(payload)
+        await orch.control(session_id=sid, command=command)
         return {"ok": True}
 
     @app.get("/v2/sessions/{sid}/state")
     async def get_state(sid: str) -> Dict[str, Any]:  # noqa: ANN401
-        return await orch.materialize_state(session_id=sid)
+        state = await orch.materialize_state(session_id=sid)
+        return state.model_dump()
 
     @app.get("/v2/sessions/{sid}/timeline")
     async def get_timeline(sid: str) -> Dict[str, Any]:  # noqa: ANN401
         events = await orch.list_events(session_id=sid)
-        return {"session_id": sid, "events": events}
+        return {"session_id": sid, "events": [e.model_dump() for e in events]}
 
     @app.get("/v2/metrics")
     async def get_metrics() -> Dict[str, Any]:  # noqa: ANN401

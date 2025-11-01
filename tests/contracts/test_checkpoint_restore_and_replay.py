@@ -2,6 +2,7 @@ import pytest
 
 from nomos.core import Orchestrator
 from nomos.core.replay import project_state
+from nomos.core.schemas import ControlCommand
 
 
 class NoopProvider:
@@ -18,11 +19,11 @@ async def test_checkpoint_restore_and_replay_projection():
     session = await orch.create_session()
     # checkpoint created at initial node (None)
     await orch.control(
-        session_id=session.id, command={"type": "checkpoint.requested", "id": "cp1"}
+        session_id=session.id, command=ControlCommand(type="checkpoint.requested", id="cp1")
     )
     # restore checkpoint
     await orch.control(
-        session_id=session.id, command={"type": "checkpoint.restore", "id": "cp1"}
+        session_id=session.id, command=ControlCommand(type="checkpoint.restore", id="cp1")
     )
 
     # materialized state
@@ -30,4 +31,4 @@ async def test_checkpoint_restore_and_replay_projection():
     # replayed state from event log
     events = await orch._store.read_by_session(session.id)  # type: ignore[attr-defined]
     st2 = project_state(session.id, events)
-    assert st["current_node"] == st2["current_node"]
+    assert st.current_node == st2["current_node"]

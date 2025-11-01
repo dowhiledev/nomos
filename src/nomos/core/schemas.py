@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
+from .types import ProviderSchema
+
 
 class TextPart(BaseModel):
     type: Literal["text"] = "text"
@@ -57,6 +59,23 @@ class Checkpoint(BaseModel):
     data: Dict[str, Any] = Field(default_factory=dict)
 
 
+class SessionInput(BaseModel):
+    """Input data for session processing."""
+    
+    messages: List[Union[Message, Dict[str, Any]]] = Field(default_factory=list)
+    schema: Optional[ProviderSchema] = None
+    
+    class Config:
+        extra = "allow"
+
+
+class ControlCommand(BaseModel):
+    """Control commands for session management."""
+    
+    type: str
+    id: Optional[str] = None
+
+
 __all__ = [
     "TextPart",
     "ImagePart",
@@ -67,4 +86,6 @@ __all__ = [
     "ToolCallPayload",
     "DecisionPayload",
     "Checkpoint",
+    "SessionInput",
+    "ControlCommand",
 ]
