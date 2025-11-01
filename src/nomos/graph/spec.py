@@ -22,9 +22,18 @@ class EdgeSpec(BaseModel):
 
     def matches(self, decision: dict) -> bool:  # noqa: ANN001
         action = decision.get("action")
-        if action == "MOVE":
+        if not self.when:
+            return False
+        # MOVE:<step_id>
+        if action == "MOVE" and self.when.startswith("MOVE:"):
             step = decision.get("step_id")
             return self.when == f"MOVE:{step}"
+        # RESPOND (wildcard)
+        if action == "RESPOND" and (self.when == "RESPOND" or self.when.startswith("RESPOND")):
+            return True
+        # END (wildcard)
+        if action == "END" and self.when == "END":
+            return True
         return False
 
 
@@ -60,4 +69,3 @@ def compile_agent(spec: AgentSpec) -> AgentSpec:
     """Validate and return the spec (placeholder for future transforms)."""
     spec.validate_spec()
     return spec
-

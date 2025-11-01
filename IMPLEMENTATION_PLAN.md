@@ -68,7 +68,7 @@ Spike 5 — Graph Runtime MVP (Nodes Only)
   - Graph builder with validation (no dangling nodes; legal conditions)
   - Compile to Agent (serializable definition)
   - Example parity with `examples/conceptual_agent/graph.py`
- - Status: In progress (minimal AgentSpec with MOVE routing; validation + compile helper DSL added; next: expand conditions)
+ - Status: In progress (AgentSpec with MOVE/RESPOND/END matching; validation + builder DSL added)
 
 Spike 6 — Checkpointing + Replay
 - Goals: Deterministic recovery; event-log → state reconstruction; node-boundary checkpoints.
@@ -83,7 +83,7 @@ Spike 7 — SSE/WS Server (duplex)
  - Scope: HTTP: create/input/control/state; SSE events; WS bi-directional sessions (send inputs + receive events).
  - Deliverables:
   - `nomos-server` with `/v2` endpoints
- - Status: In progress (FastAPI app with SSE + WS endpoints; thin over orchestrator)
+ - Status: In progress (FastAPI app with SSE + WS endpoints; thin over orchestrator; SSE/WS smoke tests added)
 
 Spike 8 — Interrupt Controller + Prioritization
 - Goals: Barge-in, pause/resume/cancel; backpressure policies.
