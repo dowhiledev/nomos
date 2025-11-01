@@ -5,7 +5,7 @@ Pydantic v2 models are used to validate inputs and provider outputs.
 
 from __future__ import annotations
 
-from typing import List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -49,6 +49,14 @@ class ToolCallPayload(BaseModel):
 DecisionPayload = Union[RespondPayload, ToolCallPayload]
 
 
+class Checkpoint(BaseModel):
+    """Checkpoint data for session state persistence."""
+    
+    id: str
+    node_id: Optional[str] = None
+    data: Dict[str, Any] = Field(default_factory=dict)
+
+
 __all__ = [
     "TextPart",
     "ImagePart",
@@ -58,4 +66,5 @@ __all__ = [
     "RespondPayload",
     "ToolCallPayload",
     "DecisionPayload",
+    "Checkpoint",
 ]

@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 from typing import Any, Dict
 
+from nomos.core.schemas import Checkpoint
+
 
 class RedisCheckpointStore:
     def __init__(
@@ -24,16 +26,16 @@ class RedisCheckpointStore:
     def _key(self, session_id: str, checkpoint_id: str) -> str:
         return f"{self._prefix}{session_id}:{checkpoint_id}"
 
-    async def save(self, session_id: str, checkpoint: Dict[str, Any]) -> None:
-        key = self._key(session_id, str(checkpoint.get("id") or "default"))
-        await self._r.set(key, json.dumps(checkpoint))
+    async def save(self, session_id: str, checkpoint: Checkpoint) -> None:
+        key = self._key(session_id, str(checkpoint.id or "default"))
+        await self._r.set(key, checkpoint.model_dump_json())
 
-    async def load(self, session_id: str, checkpoint_id: str) -> Dict[str, Any]:
+    async def load(self, session_id: str, checkpoint_id: str) -> Checkpoint:
         key = self._key(session_id, checkpoint_id)
         raw = await self._r.get(key)
         if not raw:
             raise KeyError(f"checkpoint not found: {checkpoint_id}")
-        return json.loads(raw)
+        return Checkpoint.model_validate_json(raw)
 
 
 __all__ = ["RedisCheckpointStore"]

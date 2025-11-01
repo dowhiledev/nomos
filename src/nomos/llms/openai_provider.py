@@ -8,7 +8,7 @@ Note: Function/tool-calling is out of scope for this initial adapter.
 
 from __future__ import annotations
 
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional, Union
 import json
 
 from nomos.core.events import EventType, TokenFrame, DecisionFrame
@@ -35,18 +35,15 @@ def _to_openai_content(parts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:  # 
     return out
 
 
-def _to_openai_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:  # noqa: ANN401
-    # Normalize to typed Message for validation, then build provider payloads
+def _to_openai_messages(messages: List[Union[Message, Dict[str, Any]]]) -> List[Dict[str, Any]]:  # noqa: ANN401
+    # Convert typed Messages to OpenAI message format
     oai: List[Dict[str, Any]] = []
     for m in messages:
-        try:
-            typed = Message.model_validate(m)
-            role = typed.role
-            content = typed.content
-        except Exception:
-            # best-effort fallback for raw dicts
-            role = m.get("role")
-            content = m.get("content")
+        # Convert dict messages to Message objects if needed
+        if isinstance(m, dict):
+            m = Message.model_validate(m)
+        role = m.role
+        content = m.content
         if isinstance(content, list):
             raw_parts = [
                 c.model_dump() if hasattr(c, "model_dump") else c for c in content
@@ -65,7 +62,7 @@ class OpenAIProvider(LLMProviderPort):
         self._client = client
 
     async def stream_decision(
-        self, messages: List[Dict[str, Any]], schema: ProviderSchema
+        self, messages: List[Union[Message, Dict[str, Any]]], schema: ProviderSchema
     ) -> AsyncIterator[ProviderFrame]:
         # If a test client is provided that exposes a `chat.completions.create` streaming iterator,
         # use it; otherwise attempt to create a default OpenAI client lazily.
@@ -205,7 +202,7 @@ class OpenAIProvider(LLMProviderPort):
             yield DecisionFrame(data=data).model_dump()
 
     async def stream_generate(
-        self, messages: List[Dict[str, Any]]
+        self, messages: List[Union[Message, Dict[str, Any]]]
     ) -> AsyncIterator[ProviderFrame]:
         # Implement in terms of stream_decision and pass through token events only
         async for frame in self.stream_decision(messages, schema=None):  # type: ignore[arg-type]

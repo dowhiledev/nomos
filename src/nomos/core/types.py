@@ -18,6 +18,9 @@ ProviderFrame: TypeAlias = Union[DecisionFrame, TokenFrame, Dict[str, Any]]
 # Frames emitted by tools (transition: dict allowed)
 ToolFrameType: TypeAlias = Union[ToolFrame, Dict[str, Any]]
 
+# Tool arguments passed to tool runners
+ToolArgs: TypeAlias = Dict[str, Any]
+
 
 class ToolContext(TypedDict, total=False):
     """Context passed to tools by the runner.
@@ -35,5 +38,6 @@ __all__ = [
     "ProviderSchema",
     "ProviderFrame",
     "ToolFrameType",
+    "ToolArgs",
     "ToolContext",
 ]

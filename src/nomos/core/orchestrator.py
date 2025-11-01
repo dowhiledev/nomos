@@ -60,19 +60,30 @@ class Orchestrator:
         self._redact = redact
         self._node_overrides: Dict[str, Dict[str, Any]] = node_overrides or {}
 
-    async def _append(self, session_id: str, events: list[dict]) -> None:  # noqa: ANN401
+    async def _append(self, session_id: str, events: list[SessionEvent]) -> None:
         if self._redact:
-            safe = [self._redact(ev) for ev in events]
+            safe = []
+            for ev in events:
+                redacted_data = self._redact(ev.data)
+                safe.append(SessionEvent(
+                    session_id=ev.session_id,
+                    type=ev.type,
+                    data=redacted_data,
+                    node_id=ev.node_id,
+                    event_id=ev.event_id
+                ))
         else:
             # always minimally redact known sensitive keys in event data (best-effort)
             safe = []
             for ev in events:
-                if isinstance(ev, dict) and isinstance(ev.get("data"), dict):
-                    redacted = dict(ev)
-                    redacted["data"] = redact_mapping(ev["data"])  # type: ignore[arg-type]
-                    safe.append(redacted)
-                else:
-                    safe.append(ev)
+                redacted_data = redact_mapping(ev.data)
+                safe.append(SessionEvent(
+                    session_id=ev.session_id,
+                    type=ev.type,
+                    data=redacted_data,
+                    node_id=ev.node_id,
+                    event_id=ev.event_id
+                ))
         await self._store.append(session_id, safe)
 
     async def create_session(self) -> _Session:
@@ -92,7 +103,7 @@ class Orchestrator:
             [
                 SessionEvent(
                     session_id=sid, type=EventType.SESSION_CREATED.value, data={}
-                ).model_dump(),
+                ),
             ],
         )
         inc(EventType.SESSION_CREATED.value)
@@ -106,7 +117,7 @@ class Orchestrator:
                     session_id=session_id,
                     type=EventType.INPUT_ENQUEUED.value,
                     data=inputs,
-                ).model_dump(),
+                ),
             ],
         )
         inc(EventType.INPUT_ENQUEUED.value)
@@ -132,7 +143,7 @@ class Orchestrator:
                             type=EventType.DECISION_STARTED.value,
                             data={},
                             node_id=self._current_node.get(session_id),
-                        ).model_dump(),
+                        ),
                     ],
                 )
                 inc(EventType.DECISION_STARTED.value)
@@ -148,7 +159,7 @@ class Orchestrator:
                                     "action": "RESPOND",
                                     "response": "(provider not configured)",
                                 },
-                            ).model_dump()
+                            )
                         ],
                     )
                     inc(EventType.DECISION_COMPLETED.value)
@@ -168,7 +179,7 @@ class Orchestrator:
                 messages_base = list(payload.get("messages", []))
                 while True:
                     turns += 1
-                    if turns > 1:
+                    if turns > 5:  # Allow up to 5 turns for tool calls
                         break
                     with (
                         span("provider.stream_decision"),
@@ -232,7 +243,7 @@ class Orchestrator:
                                             data={
                                                 "message": f"invalid token frame: {exc}"
                                             },
-                                        ).model_dump()
+                                        )
                                     ],
                                 )
                                 inc(EventType.ERROR_OCCURRED.value)
@@ -244,7 +255,7 @@ class Orchestrator:
                                         session_id=session_id,
                                         type=EventType.TOKEN_EMITTED.value,
                                         data=data_payload,
-                                    ).model_dump()
+                                    )
                                 ],
                             )
                             inc(EventType.TOKEN_EMITTED.value)
@@ -264,7 +275,7 @@ class Orchestrator:
                                             data={
                                                 "message": f"invalid decision frame: {exc}"
                                             },
-                                        ).model_dump()
+                                        )
                                     ],
                                 )
                                 inc(EventType.ERROR_OCCURRED.value)
@@ -277,7 +288,7 @@ class Orchestrator:
                                         type=EventType.DECISION_COMPLETED.value,
                                         data=ddata,
                                         node_id=self._current_node.get(session_id),
-                                    ).model_dump()
+                                    )
                                 ],
                             )
                             inc(EventType.DECISION_COMPLETED.value)
@@ -299,7 +310,7 @@ class Orchestrator:
                                                     "message": "tool runner not configured or invalid tool call",
                                                     "tool_call": tool_call,
                                                 },
-                                            ).model_dump()
+                                            )
                                         ],
                                     )
                                     inc(EventType.ERROR_OCCURRED.value)
@@ -392,7 +403,7 @@ class Orchestrator:
                                                     "to": to_id,
                                                     "condition": f"MOVE:{data.get('step_id')}",
                                                 },
-                                            ).model_dump()
+                                            )
                                         ],
                                     )
                                     inc(EventType.ROUTING_APPLIED.value)
@@ -407,7 +418,7 @@ class Orchestrator:
                             session_id=session_id,
                             type=EventType.ERROR_OCCURRED.value,
                             data={"message": str(exc)},
-                        ).model_dump()
+                        )
                     ],
                 )
                 inc(EventType.ERROR_OCCURRED.value)
@@ -426,7 +437,7 @@ class Orchestrator:
                         session_id=session_id,
                         type=EventType.CANCEL_APPLIED.value,
                         data={"reason": "requested"},
-                    ).model_dump(),
+                    )
                 ],
             )
             inc(EventType.CANCEL_APPLIED.value)
@@ -436,8 +447,9 @@ class Orchestrator:
         elif ctype == "resume.requested":
             self._resume_events[session_id].set()
         elif ctype == "checkpoint.requested":
+            from .schemas import Checkpoint
             cid = command.get("id") or str(uuid.uuid4())
-            cp = {"id": cid, "node_id": self._current_node.get(session_id)}
+            cp = Checkpoint(id=cid, node_id=self._current_node.get(session_id))
             await self._checkpoint_store.save(session_id, cp)
             await self._append(
                 session_id,
@@ -446,7 +458,7 @@ class Orchestrator:
                         session_id=session_id,
                         type=EventType.CHECKPOINT_CREATED.value,
                         data={"id": cid, "node_id": cp["node_id"]},
-                    ).model_dump(),
+                    )
                 ],
             )
             inc(EventType.CHECKPOINT_CREATED.value)
@@ -456,15 +468,15 @@ class Orchestrator:
             if not cid:
                 raise ValueError("checkpoint.restore requires 'id'")
             cp = await self._checkpoint_store.load(session_id, cid)
-            self._current_node[session_id] = cp.get("node_id")
+            self._current_node[session_id] = cp.node_id
             await self._append(
                 session_id,
                 [
                     SessionEvent(
                         session_id=session_id,
                         type=EventType.CHECKPOINT_RESTORED.value,
-                        data={"id": cid, "node_id": cp.get("node_id")},
-                    ).model_dump(),
+                                                data={"id": cid, "node_id": cp.node_id},
+                    )
                 ],
             )
             inc(EventType.CHECKPOINT_RESTORED.value)
@@ -477,7 +489,7 @@ class Orchestrator:
                     session_id=session_id,
                     type=EventType.CONTROL_APPLIED.value,
                     data=command,
-                ).model_dump(),
+                )
             ],
         )
         inc(EventType.CONTROL_APPLIED.value)
@@ -495,7 +507,7 @@ class Orchestrator:
 
         # For now, just forward events appended to the store (including inputs/controls)
         async for ev in self._store.subscribe(session_id):
-            yield ev
+            yield ev.model_dump()
 
     async def materialize_state(self, session_id: str) -> Dict[str, Any]:  # noqa: ANN401
         events = await self._store.read_by_session(session_id)
@@ -503,13 +515,13 @@ class Orchestrator:
         # A minimal projection: track last action/token and maintain a small tail
         tail = []
         for ev in events[-50:]:
-            tail.append(ev)
-            if ev["type"] == EventType.DECISION_COMPLETED.value:
+            tail.append(ev.model_dump())
+            if ev.type == EventType.DECISION_COMPLETED.value:
                 state.last_action = "decision.completed"
-            if ev["type"] == EventType.TOKEN_EMITTED.value:
+            if ev.type == EventType.TOKEN_EMITTED.value:
                 state.last_action = "io.token"
-            if ev["type"] == EventType.ROUTING_APPLIED.value:
-                state.current_node = ev.get("data", {}).get("to")
+            if ev.type == EventType.ROUTING_APPLIED.value:
+                state.current_node = ev.data.get("to")
         # if never routed, use initial
         if not state.current_node:
             state.current_node = self._current_node.get(session_id)
@@ -518,4 +530,5 @@ class Orchestrator:
 
     async def list_events(self, session_id: str) -> list[dict]:  # noqa: ANN401
         """Return the full event list for a session (for debugging/transport)."""
-        return await self._store.read_by_session(session_id)
+        events = await self._store.read_by_session(session_id)
+        return [ev.model_dump() for ev in events]

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+from nomos.core.schemas import Checkpoint
+
 
 class PostgresCheckpointStore:
     def __init__(self, dsn: str) -> None:
@@ -24,8 +26,8 @@ class PostgresCheckpointStore:
 
         return await asyncpg.connect(self._dsn)
 
-    async def save(self, session_id: str, checkpoint: Dict[str, Any]) -> None:
-        cp_id = str(checkpoint.get("id") or "default")
+    async def save(self, session_id: str, checkpoint: Checkpoint) -> None:
+        cp_id = str(checkpoint.id or "default")
         async with await self._conn() as conn:  # type: ignore[attr-defined]
             await conn.execute(
                 """
@@ -35,10 +37,10 @@ class PostgresCheckpointStore:
                 """,
                 session_id,
                 cp_id,
-                checkpoint,
+                checkpoint.model_dump(),
             )
 
-    async def load(self, session_id: str, checkpoint_id: str) -> Dict[str, Any]:
+    async def load(self, session_id: str, checkpoint_id: str) -> Checkpoint:
         async with await self._conn() as conn:  # type: ignore[attr-defined]
             row = await conn.fetchrow(
                 "SELECT payload FROM nomos_checkpoints WHERE session_id=$1 AND checkpoint_id=$2",
@@ -47,7 +49,7 @@ class PostgresCheckpointStore:
             )
         if not row:
             raise KeyError(f"checkpoint not found: {checkpoint_id}")
-        return dict(row[0])  # type: ignore[index]
+        return Checkpoint.model_validate(dict(row[0]))  # type: ignore[index]
 
 
 __all__ = ["PostgresCheckpointStore"]

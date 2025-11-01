@@ -6,38 +6,40 @@ Adapters will implement these in provider/tool/store/server packages.
 
 from __future__ import annotations
 
-from typing import Any, AsyncIterator, Dict, List, Protocol
-from .types import ProviderSchema, ProviderFrame, ToolFrameType
+from typing import Any, AsyncIterator, Dict, List, Protocol, Union
+from .types import ProviderSchema, ProviderFrame, ToolFrameType, ToolArgs, ToolContext
+from .schemas import Message, Checkpoint
+from .events import SessionEvent
 
 
 class LLMProviderPort(Protocol):
     async def stream_decision(
-        self, messages: List[Dict[str, Any]], schema: ProviderSchema
+        self, messages: List[Union[Message, Dict[str, Any]]], schema: ProviderSchema
     ) -> AsyncIterator[ProviderFrame]: ...
 
     async def stream_generate(
-        self, messages: List[Dict[str, Any]]
+        self, messages: List[Union[Message, Dict[str, Any]]]
     ) -> AsyncIterator[ProviderFrame]: ...
 
 
 class ToolRunnerPort(Protocol):
     async def run(
-        self, tool_name: str, args: Dict[str, Any], ctx: Dict[str, Any]
+        self, tool_name: str, args: ToolArgs, ctx: ToolContext
     ) -> AsyncIterator[ToolFrameType]: ...
 
 
 class EventStorePort(Protocol):
-    async def append(self, session_id: str, events: List[Dict[str, Any]]) -> None: ...
+    async def append(self, session_id: str, events: List[SessionEvent]) -> None: ...
 
-    async def read_by_session(self, session_id: str) -> List[Dict[str, Any]]: ...
+    async def read_by_session(self, session_id: str) -> List[SessionEvent]: ...
 
-    def subscribe(self, session_id: str) -> AsyncIterator[Dict[str, Any]]: ...
+    def subscribe(self, session_id: str) -> AsyncIterator[SessionEvent]: ...
 
 
 class CheckpointStorePort(Protocol):
-    async def save(self, session_id: str, checkpoint: Dict[str, Any]) -> None: ...
+    async def save(self, session_id: str, checkpoint: Checkpoint) -> None: ...
 
-    async def load(self, session_id: str, checkpoint_id: str) -> Dict[str, Any]: ...
+    async def load(self, session_id: str, checkpoint_id: str) -> Checkpoint: ...
 
 
 __all__ = [
