@@ -53,4 +53,19 @@ def measure(name: str):  # noqa: ANN001
         record_latency(name, time.perf_counter() - start)
 
 
-__all__ = ["EVENT_COUNTERS", "LATENCY_HIST", "inc", "reset_counters", "span", "measure", "record_latency"]
+def metrics_snapshot() -> Dict[str, Dict[str, float]]:  # noqa: ANN401
+    """Return a simple snapshot of counters and latency stats (avg only)."""
+    avg = {k: (sum(v) / len(v) if v else 0.0) for k, v in LATENCY_HIST.items()}
+    return {"counters": dict(EVENT_COUNTERS), "latency_avg": avg}
+
+
+__all__ = [
+    "EVENT_COUNTERS",
+    "LATENCY_HIST",
+    "inc",
+    "reset_counters",
+    "span",
+    "measure",
+    "record_latency",
+    "metrics_snapshot",
+]

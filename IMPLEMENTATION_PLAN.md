@@ -104,14 +104,14 @@ Spike 10 — Subgraphs + Agent-as-Tool
 - Scope: as_tool adapter; subgraph lifecycle; resource quotas.
  - Deliverables:
   - Agent-as-tool wrapper + tests; subgraph example aligned with conceptual sample
- - Status: Pending
+ - Status: In progress (agent-as-tool adapter provided in `nomos.tools.agent_adapter.as_tool`; end-to-end test with nested tool invocation added)
 
 Spike 11 — Observability (Tracing, Metrics, Timeline)
 - Goals: OTEL spans at node/event granularity; metrics; timeline explorer hooks.
 - Scope: Span/link strategy; exporters; sampling; correlation IDs.
  - Deliverables:
   - `nomos-observe` setup helpers; default spans around LLM/tool/orchestrator; metrics counters/histograms
- - Status: In progress (lightweight counters + timing metrics via measure(); spans around provider/tool/orchestrator boundaries; SSE emits event ids for timeline resume)
+ - Status: In progress (lightweight counters + timing metrics via measure(); spans around provider/tool/orchestrator boundaries; SSE emits event ids for timeline resume; metrics snapshot available at `/v2/metrics`)
 
 Spike 12 — Performance + Scaling
 - Goals: Concurrency tuning; worker pools; backpressure and rate limits.

@@ -20,6 +20,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import StreamingResponse
 
 from nomos.core import Orchestrator
+from nomos.core.observe import metrics_snapshot
 from nomos.graph import AgentSpec
 
 
@@ -51,6 +52,10 @@ def create_app(agent: Optional[AgentSpec] = None, *, orchestrator: Optional[Orch
     async def get_timeline(sid: str) -> Dict[str, Any]:  # noqa: ANN401
         events = await orch.list_events(session_id=sid)
         return {"session_id": sid, "events": events}
+
+    @app.get("/v2/metrics")
+    async def get_metrics() -> Dict[str, Any]:  # noqa: ANN401
+        return metrics_snapshot()
 
     async def _sse_gen(sid: str, last_event_id: Optional[str] = None) -> AsyncIterator[str]:
         # Yield existing timeline first (after last_event_id if provided)

@@ -16,7 +16,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from dataclasses import dataclass
-from typing import Any, AsyncIterator, Dict, Optional
+from typing import Any, AsyncIterator, Callable, Dict, Optional
 
 from .events import EventType, SessionEvent
 from .state import SessionState
@@ -25,6 +25,7 @@ from .store.checkpoint_memory import InMemoryCheckpointStore
 from .ports import LLMProviderPort, ToolRunnerPort
 from nomos.graph import AgentSpec
 from .observe import inc, span, measure
+from .redaction import redact_mapping
 
 
 @dataclass
@@ -41,6 +42,7 @@ class Orchestrator:
         provider: Optional[LLMProviderPort] = None,
         tool_runner: Optional[ToolRunnerPort] = None,
         checkpoint_store: Optional[InMemoryCheckpointStore] = None,
+        redact: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
     ) -> None:
         self._agent = agent
         self._store = store or InMemoryEventStore()
@@ -53,6 +55,22 @@ class Orchestrator:
         self._cancel_flags: Dict[str, bool] = {}
         self._cancel_events: Dict[str, asyncio.Event] = {}
         self._resume_events: Dict[str, asyncio.Event] = {}
+        self._redact = redact
+
+    async def _append(self, session_id: str, events: list[dict]) -> None:  # noqa: ANN401
+        if self._redact:
+            safe = [self._redact(ev) for ev in events]
+        else:
+            # always minimally redact known sensitive keys in event data (best-effort)
+            safe = []
+            for ev in events:
+                if isinstance(ev, dict) and isinstance(ev.get("data"), dict):
+                    redacted = dict(ev)
+                    redacted["data"] = redact_mapping(ev["data"])  # type: ignore[arg-type]
+                    safe.append(redacted)
+                else:
+                    safe.append(ev)
+        await self._store.append(session_id, safe)
 
     async def create_session(self) -> _Session:
         sid = str(uuid.uuid4())
@@ -66,7 +84,7 @@ class Orchestrator:
             self._current_node[sid] = self._agent.start
         else:
             self._current_node[sid] = None
-        await self._store.append(
+        await self._append(
             sid,
             [
                 SessionEvent(session_id=sid, type=EventType.SESSION_CREATED.value, data={}).model_dump(),
@@ -76,7 +94,7 @@ class Orchestrator:
         return _Session(id=sid)
 
     async def input(self, session_id: str, inputs: Dict[str, Any]) -> None:  # noqa: ANN401
-        await self._store.append(
+        await self._append(
             session_id,
             [
                 SessionEvent(
@@ -99,7 +117,7 @@ class Orchestrator:
                 # Honor pause
                 await self._resume_events[session_id].wait()
                 # Start decision
-                await self._store.append(
+                await self._append(
                     session_id,
                     [
                         SessionEvent(
@@ -113,7 +131,7 @@ class Orchestrator:
                 inc(EventType.DECISION_STARTED.value)
                 if not self._provider:
                     # No provider wired: emit a trivial completion
-                    await self._store.append(
+                    await self._append(
                         session_id,
                         [
                             SessionEvent(
@@ -137,7 +155,7 @@ class Orchestrator:
                             break
                         ftype = frame.get("type")
                         if ftype == EventType.TOKEN_EMITTED.value:
-                            await self._store.append(
+                            await self._append(
                                 session_id,
                                 [
                                     SessionEvent(
@@ -151,7 +169,7 @@ class Orchestrator:
                             # continue streaming provider frames
                             continue
                         elif ftype == EventType.DECISION_COMPLETED.value:
-                            await self._store.append(
+                            await self._append(
                                 session_id,
                                 [
                                     SessionEvent(
@@ -171,7 +189,7 @@ class Orchestrator:
                                 tool_name = tool_call.get("tool_name")
                                 tool_kwargs = tool_call.get("tool_kwargs", {})
                                 if not self._tool_runner or not tool_name:
-                                    await self._store.append(
+                                    await self._append(
                                         session_id,
                                         [
                                             SessionEvent(
@@ -194,13 +212,13 @@ class Orchestrator:
                                             self._cancel_flags[session_id] = False
                                             self._cancel_events[session_id].clear()
                                             break
-                                        await self._store.append(session_id, [tframe])
+                                        await self._append(session_id, [tframe])
                                         inc(tframe.get("type", "tool.frame"))
                             # Handle routing (MOVE) only on decision frame
                             if isinstance(self._agent, AgentSpec) and action == "MOVE":
                                 to_id = self._agent.route(self._current_node.get(session_id) or "", data)  # type: ignore[arg-type]
                                 if to_id:
-                                    await self._store.append(
+                                    await self._append(
                                         session_id,
                                         [
                                             SessionEvent(
@@ -218,7 +236,7 @@ class Orchestrator:
                                     self._current_node[session_id] = to_id
                             break
             except Exception as exc:  # noqa: BLE001
-                await self._store.append(
+                await self._append(
                     session_id,
                     [
                         SessionEvent(
@@ -237,7 +255,7 @@ class Orchestrator:
             # propagate to tools via cancel event (if in-flight)
             if session_id in self._cancel_events:
                 self._cancel_events[session_id].set()
-            await self._store.append(
+            await self._append(
                 session_id,
                 [
                     SessionEvent(
@@ -255,7 +273,7 @@ class Orchestrator:
             cid = command.get("id") or str(uuid.uuid4())
             cp = {"id": cid, "node_id": self._current_node.get(session_id)}
             await self._checkpoint_store.save(session_id, cp)
-            await self._store.append(
+            await self._append(
                 session_id,
                 [
                     SessionEvent(
@@ -273,7 +291,7 @@ class Orchestrator:
                 raise ValueError("checkpoint.restore requires 'id'")
             cp = await self._checkpoint_store.load(session_id, cid)
             self._current_node[session_id] = cp.get("node_id")
-            await self._store.append(
+            await self._append(
                 session_id,
                 [
                     SessionEvent(
@@ -286,7 +304,7 @@ class Orchestrator:
             inc(EventType.CHECKPOINT_RESTORED.value)
             return
         # default: record control applied
-        await self._store.append(
+        await self._append(
             session_id,
             [
                 SessionEvent(
