@@ -61,16 +61,15 @@ async def clear_cart():
 
 
 @runner.tool("finalize.order", timeout=5)
-def finalize_order(payment_method: str, payment: float | None = None):
+def finalize_order(payment_method: str, payment: float | None = None, ctx=None):
     """Finalizes the Order."""
     total = sum(i["price"] for i in _cart)
     change = (payment or 0) - total if payment_method == "Cash" else 0
+    if ctx:
+        ctx.emit('tool.progress', 'process_payment')
+        ctx.emit('tool.stdout', f'total: {total}')
     _cart.clear()
-    return {
-        "result": {"ok": True, "change": change},
-        "progress": ["process_payment"],
-        "stdout": [f"total: {total}"]
-    }
+    return {"ok": True, "change": change}
 
 
 async def main() -> None:

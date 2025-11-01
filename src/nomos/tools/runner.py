@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 from dataclasses import dataclass
-from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Optional
+from typing import Any, AsyncIterator, Awaitable, Callable, Dict, List, Optional
 from concurrent.futures import ProcessPoolExecutor
 
 from pydantic import BaseModel, create_model
@@ -29,6 +29,36 @@ class ToolInfo:
     schema: type[BaseModel]
     timeout: Optional[float]
     description: str
+
+
+class ToolExecutionContext:
+    """Context passed to tool functions for emitting events."""
+    
+    def __init__(self, tool_name: str):
+        self.tool_name = tool_name
+        self._events: List[Dict[str, Any]] = []
+    
+    def emit(self, event_type: str, data: Any = None, **kwargs) -> None:
+        """Emit a tool event."""
+        event = {"type": event_type, "tool": self.tool_name}
+        if data is not None:
+            if isinstance(data, dict):
+                event.update(data)
+            else:
+                # For tool.progress, data is the stage
+                # For tool.stdout, data is the line
+                if event_type == "tool.progress":
+                    event["stage"] = str(data)
+                elif event_type == "tool.stdout":
+                    event["line"] = str(data)
+                else:
+                    event["data"] = data
+        event.update(kwargs)
+        self._events.append(event)
+    
+    def get_events(self) -> List[Dict[str, Any]]:
+        """Get collected events."""
+        return self._events
 
 
 def _create_tool_schema(func: Callable[..., Any], name: str) -> type[BaseModel]:
@@ -178,38 +208,31 @@ class SimpleToolRunner(ToolRunnerPort):
 
         # New style: execute and emit events
         try:
-            result = await self._execute_tool(tool_info, call_kwargs, ctx)
+            # Create execution context
+            exec_ctx = ToolExecutionContext(tool_name)
             
-            # Handle result
-            if isinstance(result, dict):
-                # Custom result with overrides
-                if 'progress' in result:
-                    for stage in result['progress']:
-                        yield {"type": "tool.progress", "stage": stage}
-                if 'stdout' in result:
-                    for line in result['stdout']:
-                        yield {"type": "tool.stdout", "line": str(line)}
-                final_result = result.get('result', result)
-                yield {"type": "tool.completed", "tool": tool_name, "result": final_result}
-            else:
-                # Auto-generate events
-                if result is not None:
-                    yield {"type": "tool.stdout", "line": str(result)}
-                yield {"type": "tool.completed", "tool": tool_name, "result": result}
+            result = await self._execute_tool(tool_info, call_kwargs, exec_ctx)
+            
+            # Yield any events collected during execution
+            for event in exec_ctx.get_events():
+                yield event
+            
+            # Emit completed
+            yield {"type": "tool.completed", "tool": tool_name, "result": result}
                 
         except Exception as e:
             yield {"type": "tool.error", "tool": tool_name, "error": str(e)}
 
     async def _execute_tool(
-        self, tool_info: ToolInfo, call_kwargs: Dict[str, Any], ctx: Dict[str, Any]
+        self, tool_info: ToolInfo, call_kwargs: Dict[str, Any], exec_ctx: ToolExecutionContext
     ) -> Any:
         """Execute the tool function with appropriate timeout and execution mode."""
         fn = tool_info.func
         
-        # Add ctx if function accepts it
+        # Add execution context if function accepts it
         sig = inspect.signature(fn)
         if "ctx" in sig.parameters:
-            call_kwargs["ctx"] = ctx
+            call_kwargs["ctx"] = exec_ctx
         
         # Determine timeout
         timeout = tool_info.timeout or self._timeout
@@ -276,4 +299,4 @@ async def _iterate_with_timeout(
         yield item
 
 
-__all__ = ["SimpleToolRunner"]
+__all__ = ["SimpleToolRunner", "ToolExecutionContext"]
