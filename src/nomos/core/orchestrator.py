@@ -43,6 +43,7 @@ class Orchestrator:
         tool_runner: Optional[ToolRunnerPort] = None,
         checkpoint_store: Optional[InMemoryCheckpointStore] = None,
         redact: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
+        node_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> None:
         self._agent = agent
         self._store = store or InMemoryEventStore()
@@ -56,6 +57,7 @@ class Orchestrator:
         self._cancel_events: Dict[str, asyncio.Event] = {}
         self._resume_events: Dict[str, asyncio.Event] = {}
         self._redact = redact
+        self._node_overrides: Dict[str, Dict[str, Any]] = node_overrides or {}
 
     async def _append(self, session_id: str, events: list[dict]) -> None:  # noqa: ANN401
         if self._redact:
@@ -151,12 +153,21 @@ class Orchestrator:
                     inc(EventType.DECISION_COMPLETED.value)
                     continue
 
-                # Stream decision from provider; provider yields generic frames
+                # Resolve node-level overrides
+                current_node_id = self._current_node.get(session_id)
+                ov = self._node_overrides.get(current_node_id or "", {})
+                eff_provider = ov.get("provider", self._provider) or self._provider
+                eff_tool_runner = (
+                    ov.get("tool_runner", self._tool_runner) or self._tool_runner
+                )
+                allowed_tools = ov.get("allowed_tools")
+
+                # Stream decision from effective provider; provider yields generic frames
                 with (
                     span("provider.stream_decision"),
                     measure("provider.stream_decision"),
                 ):
-                    async for frame in self._provider.stream_decision(
+                    async for frame in eff_provider.stream_decision(  # type: ignore[union-attr]
                         payload.get("messages", []), schema=None
                     ):
                         # Check pause between frames
@@ -200,7 +211,7 @@ class Orchestrator:
                                 tool_call = data.get("tool_call", {}) or {}
                                 tool_name = tool_call.get("tool_name")
                                 tool_kwargs = tool_call.get("tool_kwargs", {})
-                                if not self._tool_runner or not tool_name:
+                                if not eff_tool_runner or not tool_name:
                                     await self._append(
                                         session_id,
                                         [
@@ -220,12 +231,41 @@ class Orchestrator:
                                 ctx = {
                                     "cancel_event": self._cancel_events[session_id],
                                     "session_id": session_id,
+                                    "node_id": current_node_id,
+                                    "memory": ov.get("memory"),
                                 }
                                 with (
                                     span(f"tool.run:{tool_name}"),
                                     measure(f"tool.run:{tool_name}"),
                                 ):
-                                    async for tframe in self._tool_runner.run(
+                                    runner = eff_tool_runner
+                                    if allowed_tools is not None:
+
+                                        class _FilteredRunner:
+                                            def __init__(self, inner, allowed):  # noqa: ANN001
+                                                self._inner = inner
+                                                self._allowed = set(allowed)
+
+                                            async def run(
+                                                self,
+                                                tool_name: str,
+                                                args: Dict[str, Any],
+                                                ctx: Dict[str, Any],
+                                            ):  # noqa: ANN001
+                                                if tool_name not in self._allowed:
+                                                    yield {
+                                                        "type": "tool.error",
+                                                        "tool": tool_name,
+                                                        "error": "unauthorized",
+                                                    }
+                                                    return
+                                                async for fr in self._inner.run(
+                                                    tool_name, args, ctx
+                                                ):
+                                                    yield fr
+
+                                        runner = _FilteredRunner(runner, allowed_tools)
+                                    async for tframe in runner.run(
                                         tool_name, tool_kwargs, ctx
                                     ):
                                         if (

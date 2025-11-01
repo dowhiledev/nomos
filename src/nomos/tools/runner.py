@@ -16,11 +16,15 @@ from __future__ import annotations
 import asyncio
 import inspect
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict
-
+from concurrent.futures import ProcessPoolExecutor
 from nomos.core.ports import ToolRunnerPort
 
 
 ToolCallable = Callable[..., Any]
+
+
+def _call_sync(fn: ToolCallable, kwargs: Dict[str, Any]) -> Any:  # noqa: ANN401
+    return fn(**kwargs)
 
 
 class SimpleToolRunner(ToolRunnerPort):
@@ -30,12 +34,16 @@ class SimpleToolRunner(ToolRunnerPort):
         *,
         timeout_s: float | None = None,
         allowed_tools: set[str] | None = None,
-        execution_mode: str = "inline",  # inline | thread
+        execution_mode: str = "inline",  # inline | thread | process
+        processes: int | None = None,
     ) -> None:
         self._registry = registry
         self._timeout = timeout_s
         self._allowed = allowed_tools
         self._exec_mode = execution_mode
+        self._proc_pool: ProcessPoolExecutor | None = None
+        if self._exec_mode == "process":
+            self._proc_pool = ProcessPoolExecutor(max_workers=processes)
 
     async def run(
         self, tool_name: str, args: Dict[str, Any], ctx: Dict[str, Any]
@@ -73,6 +81,14 @@ class SimpleToolRunner(ToolRunnerPort):
                 if self._exec_mode == "thread":
                     loop = asyncio.get_running_loop()
                     value = await loop.run_in_executor(None, lambda: res)
+                elif self._exec_mode == "process":
+                    # Only supports sync functions; if coroutine/generator was returned we wouldn't be here
+                    loop = asyncio.get_running_loop()
+                    if self._proc_pool is None:
+                        self._proc_pool = ProcessPoolExecutor()
+                    value = await loop.run_in_executor(
+                        self._proc_pool, _call_sync, fn, call_kwargs
+                    )
                 else:
                     value = res
             yield {"type": "tool.completed", "tool": tool_name, "result": value}

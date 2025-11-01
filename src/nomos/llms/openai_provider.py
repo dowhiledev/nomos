@@ -12,6 +12,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 import json
 
 from nomos.core.events import EventType, TokenFrame, DecisionFrame
+from pydantic import BaseModel
 from nomos.core.ports import LLMProviderPort
 
 
@@ -147,17 +148,32 @@ class OpenAIProvider(LLMProviderPort):
                 tool_kwargs = json.loads(raw_args) if raw_args else {}
             except Exception:
                 tool_kwargs = {"__raw__": raw_args}
-            yield DecisionFrame(
-                data={
-                    "action": "TOOL_CALL",
-                    "tool_call": {"tool_name": tool_name, "tool_kwargs": tool_kwargs},
-                }
-            ).model_dump()
+            data: Dict[str, Any] = {
+                "action": "TOOL_CALL",
+                "tool_call": {"tool_name": tool_name, "tool_kwargs": tool_kwargs},
+            }
+            # If schema is a mapping of tool_name -> Pydantic model, parse kwargs
+            if isinstance(schema, dict) and tool_name in schema:
+                model = schema[tool_name]
+                try:
+                    if isinstance(model, type) and issubclass(model, BaseModel):
+                        parsed = model.model_validate(tool_kwargs)
+                        data["tool_call"]["tool_kwargs_parsed"] = parsed.model_dump()
+                except Exception as exc:  # pragma: no cover
+                    data.setdefault("schema_error", str(exc))
+            yield DecisionFrame(data=data).model_dump()
         else:
             response_text = "".join(full_text)
-            yield DecisionFrame(
-                data={"action": "RESPOND", "response": response_text}
-            ).model_dump()
+            data = {"action": "RESPOND", "response": response_text}
+            # If schema is a Pydantic model class, try to parse JSON body
+            if isinstance(schema, type) and issubclass(schema, BaseModel):
+                try:
+                    obj = json.loads(response_text)
+                    parsed = schema.model_validate(obj)
+                    data["parsed"] = parsed.model_dump()
+                except Exception:  # pragma: no cover - ignore parse errors
+                    pass
+            yield DecisionFrame(data=data).model_dump()
 
     async def stream_generate(
         self, messages: List[Dict[str, Any]]
