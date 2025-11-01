@@ -168,7 +168,7 @@ class Orchestrator:
                     measure("provider.stream_decision"),
                 ):
                     async for frame in eff_provider.stream_decision(  # type: ignore[union-attr]
-                        payload.get("messages", []), schema=None
+                        payload.get("messages", []), schema=payload.get("schema")
                     ):
                         # Check pause between frames
                         await self._resume_events[session_id].wait()

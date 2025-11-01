@@ -83,7 +83,10 @@ class OpenAIProvider(LLMProviderPort):
         oai_messages = _to_openai_messages(messages)
         # Start streaming chat completion
         stream = client.chat.completions.create(
-            model=self._model, messages=oai_messages, stream=True
+            model=self._model,
+            messages=oai_messages,
+            stream=True,
+            response_format={"type": "json_object"},
         )
         # Aggregate the full text to yield a final RESPOND decision, or collect tool_call deltas
         full_text: List[str] = []
@@ -151,7 +154,7 @@ class OpenAIProvider(LLMProviderPort):
                             args_delta
                         )
 
-        # final decision: prefer tool_call if present, else respond text
+        # final decision: prefer tool_call if present, else try to parse JSON decision, else respond text
         if tool_calls:
             first = tool_calls[sorted(tool_calls.keys())[0]]
             tool_name = first.get("name") or ""
@@ -176,8 +179,16 @@ class OpenAIProvider(LLMProviderPort):
             yield DecisionFrame(data=data).model_dump()
         else:
             response_text = "".join(full_text)
+            # First try to parse as a structured decision JSON
+            try:
+                obj = json.loads(response_text)
+                if isinstance(obj, dict) and obj.get("action"):
+                    yield DecisionFrame(data=obj).model_dump()
+                    return
+            except Exception:
+                pass
+            # Fallback: RESPOND action with raw text (optionally attempt schema parse)
             data = {"action": "RESPOND", "response": response_text}
-            # If schema is a Pydantic model class, try to parse JSON body
             if isinstance(schema, type) and issubclass(schema, BaseModel):
                 try:
                     obj = json.loads(response_text)

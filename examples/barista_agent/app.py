@@ -7,6 +7,9 @@ from nomos.core import Orchestrator
 from nomos.core.events import EventType
 from nomos.graph import Graph, LLMNode, Edge
 from nomos.tools.runner import SimpleToolRunner
+from nomos.llms.openai_provider import OpenAIProvider
+from nomos.graph.prompt import edge_conditions_for_prompt
+import os
 
 
 # In-memory state (demo only)
@@ -174,56 +177,148 @@ async def main() -> None:
         allowed = {t for t in (node.tools or []) if isinstance(t, str) and t in tools}
         if allowed:
             node_overrides[node.id] = {"allowed_tools": allowed}
+    # Choose provider: OpenAI if configured, otherwise demo stub
+    provider = OpenAIProvider() if os.getenv("OPENAI_API_KEY") else BaristaProvider()
     orch = Orchestrator(
-        agent=spec,
-        provider=BaristaProvider(),
-        tool_runner=runner,
-        node_overrides=node_overrides,
+        agent=spec, provider=provider, tool_runner=runner, node_overrides=node_overrides
     )
     s = await orch.create_session()
 
-    async def wait_for_event(inputs: Dict[str, Any], pred, timeout: float = 5.0):  # noqa: ANN401
+    async def wait_for_event(inputs: Dict[str, Any], pred, timeout: float = 15.0):  # noqa: ANN401
         async def _consume():
             async for ev in orch.stream(session_id=s.id, inputs=inputs):
                 if pred(ev):
                     return ev
+
         try:
             return await asyncio.wait_for(_consume(), timeout=timeout)
         except asyncio.TimeoutError:
             print("[warn] timed out waiting for event", flush=True)  # noqa: T201
             return None
 
+    async def wait_for_decision(inputs: Dict[str, Any], pred, timeout: float = 15.0):  # noqa: ANN401
+        async def _consume():
+            async for ev in orch.stream(session_id=s.id, inputs=inputs):
+                if ev["type"] == EventType.DECISION_COMPLETED.value and pred(
+                    ev.get("data", {})
+                ):
+                    return ev
+
+        try:
+            return await asyncio.wait_for(_consume(), timeout=timeout)
+        except asyncio.TimeoutError:
+            print("[warn] timed out waiting for decision", flush=True)  # noqa: T201
+            return None
+
+    def build_messages(
+        current: str, user_text: str, force: str | None = None
+    ) -> List[Dict[str, Any]]:  # noqa: ANN401
+        edges_txt = edge_conditions_for_prompt(spec, current)
+        tools_list = [
+            t for t in (next((n.tools for n in g._nodes if n.id == current), []) or [])
+        ]  # type: ignore[attr-defined]
+        constraints = [
+            "Output strictly one JSON object with a single decision.",
+            "Valid shapes:",
+            '- MOVE: {"action":"MOVE","step_id":<one of allowed targets>}',
+            '- TOOL_CALL: {"action":"TOOL_CALL","tool_call":{"tool_name":<name>,"tool_kwargs":{...}}}',
+            '- RESPOND: {"action":"RESPOND","response":<text>}',
+            "Examples:",
+            '{"action":"MOVE","step_id":"order_entry"}',
+            '{"action":"TOOL_CALL","tool_call":{"tool_name":"add.to.cart","tool_kwargs":{"coffee_type":"Latte","size":"M","price":3.5}}}',
+            "No commentary, no markdown, no code fences.",
+        ]
+        if force:
+            constraints.append(f"For this turn, you MUST perform: {force}.")
+        sys = {
+            "role": "system",
+            "content": [{"type": "text", "data": "\n".join(constraints)}],
+        }
+        assistant = {
+            "role": "assistant",
+            "content": [
+                {"type": "text", "data": f"Current node: {current}"},
+                {"type": "text", "data": "Allowed targets:\n" + edges_txt},
+                {"type": "text", "data": f"Tools available in this node: {tools_list}"},
+            ],
+        }
+        user = {"role": "user", "content": [{"type": "text", "data": user_text}]}
+        return [sys, assistant, user]
+
     # 1) Greet -> order_entry
     ev = await wait_for_event(
-        {"messages": [{"role": "user", "content": [{"type": "text", "data": "hello"}]}]},
+        {"messages": build_messages("greeting", "hello", force="MOVE:order_entry")},
         lambda e: e["type"] == EventType.ROUTING_APPLIED.value,
     )
     if ev:
         print("route:", ev["data"])  # noqa: T201
 
     # 2) Tool add_to_cart at order_entry
-    await wait_for_event(
-        {"messages": [{"role": "user", "content": [{"type": "text", "data": "I want a latte"}]}]},
-        lambda e: e["type"] in ("tool.completed", "tool.error"),
+    dec = await wait_for_decision(
+        {
+            "messages": build_messages(
+                "order_entry",
+                "Please add a medium latte to my cart.",
+                force="TOOL_CALL:add.to.cart",
+            )
+        },
+        lambda d: d.get("action") == "TOOL_CALL",
     )
+    # For demo reliability, run the tool locally regardless of model choice
+    print("[info] running add.to.cart", flush=True)  # noqa: T201
+    async for f in runner.run(
+        "add.to.cart", {"coffee_type": "Latte", "size": "M", "price": 3.5}, {}
+    ):
+        print(f)  # noqa: T201
+        if f["type"] in ("tool.completed", "tool.error"):
+            break
 
     # 3) order_entry -> order_review
     ev = await wait_for_event(
-        {"messages": [{"role": "user", "content": [{"type": "text", "data": "review"}]}]},
+        {
+            "messages": build_messages(
+                "order_entry", "review my order", force="MOVE:order_review"
+            )
+        },
         lambda e: e["type"] == EventType.ROUTING_APPLIED.value,
     )
     if ev:
         print("route:", ev["data"])  # noqa: T201
 
     # 4) finalize_order tool
-    await wait_for_event(
-        {"messages": [{"role": "user", "content": [{"type": "text", "data": "pay"}]}]},
-        lambda e: e["type"] in ("tool.completed", "tool.error"),
+    ev = await wait_for_event(
+        {
+            "messages": build_messages(
+                "order_review", "proceed to payment", force="MOVE:payment_processing"
+            )
+        },
+        lambda e: e["type"] == EventType.ROUTING_APPLIED.value,
     )
+    if ev:
+        print("route:", ev["data"])  # noqa: T201
 
     # 5) payment_processing -> order_completed
+    dec2 = await wait_for_decision(
+        {
+            "messages": build_messages(
+                "payment_processing",
+                "finalize the order",
+                force="TOOL_CALL:finalize.order",
+            )
+        },
+        lambda d: d.get("action") == "TOOL_CALL",
+    )
+    print("[info] running finalize.order", flush=True)  # noqa: T201
+    async for f in runner.run("finalize.order", {"payment_method": "Card"}, {}):
+        print(f)  # noqa: T201
+        if f["type"] in ("tool.completed", "tool.error"):
+            break
     ev = await wait_for_event(
-        {"messages": [{"role": "user", "content": [{"type": "text", "data": "done"}]}]},
+        {
+            "messages": build_messages(
+                "payment_processing", "complete", force="MOVE:order_completed"
+            )
+        },
         lambda e: e["type"] == EventType.ROUTING_APPLIED.value,
     )
     if ev:
