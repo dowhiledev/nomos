@@ -25,6 +25,7 @@ Milestone 0 — DDD Foundations (documentation only)
   - .ddd/PORTS_AND_ADAPTERS.md, OBSERVABILITY.md, SECURITY_AND_GOVERNANCE.md (done)
   - ADR/0001-architecture-style.md (done)
 - Exit Criteria: Stakeholder sign‑off on events, commands, and initial ports.
+ - Status: Completed
 
 Spike 1 — Event Schema + Orchestrator Skeleton (actor)
 - Goals: Canonical event envelope; minimal orchestrator loop with create_session/stream/control/state.
@@ -34,6 +35,7 @@ Spike 1 — Event Schema + Orchestrator Skeleton (actor)
   - Orchestrator: `create_session()`, `stream(session_id, inputs)`, `control(session_id, command)`, `materialize_state()`
   - In-memory event store + projection module
   - Minimal dev harness (CLI entry) for local streaming
+ - Status: Completed (core skeleton + in-memory store + basic projection)
 
 Spike 2 — Port Contracts + Contract Tests
 - Goals: Lock the behavior of ports before adapters (providers/tools/stores/transports).
@@ -41,91 +43,105 @@ Spike 2 — Port Contracts + Contract Tests
 - Deliverables:
   - Contract tests (fixtures + fake adapters) verifying streaming, cancellation, and error semantics
   - Port docs linked back to .ddd/PORTS_AND_ADAPTERS.md
+ - Status: Completed (event store, provider, tool runner, checkpoint store contracts in tests)
 
 Spike 3 — Async LLM Streaming Adapters (OpenAI, Groq)
 - Goals: Unified async streaming interface for token/decision output.
 - Scope: `stream_decision(messages, schema)` + `stream_generate(messages)`; function/tool-calling parity; error handling.
-- Deliverables:
+ - Deliverables:
   - Provider shims (openai, groq) with typed outputs
   - Conformance tests (token stream, finish reasons, errors)
+ - Status: Pending (using fake provider in tests)
 
 Spike 4 — Tool Runner 2.0 (Async, Progress, Cancellation)
 - Goals: Async tool contract with progress/partial outputs; budgets/timeouts; safe execution.
 - Scope: `@tool` decorator; async generator tools; cancellation tokens; subprocess/threadpool isolation hooks.
-- Deliverables:
+ - Deliverables:
   - `nomos-tools` runner; progress events (`tool.started|progress|stdout|completed|error`)
   - Budget/timeout enforcement; structured errors; unit tests
+ - Status: In progress (orchestrator integration with fake tool runner in tests)
 
 Spike 5 — Graph Runtime MVP (Nodes Only)
 - Goals: Compose nodes and edges; compile() → Agent; execute via orchestrator.
 - Scope: `Graph`, `LLMNode`, `Edge` API; node-level overrides (LLM/tools/memory); cycles allowed.
-- Deliverables:
+ - Deliverables:
   - Graph builder with validation (no dangling nodes; legal conditions)
   - Compile to Agent (serializable definition)
   - Example parity with `examples/conceptual_agent/graph.py`
+ - Status: In progress (minimal AgentSpec with MOVE routing; orchestrator current_node & routing.applied)
 
 Spike 6 — Checkpointing + Replay
 - Goals: Deterministic recovery; event-log → state reconstruction; node-boundary checkpoints.
 - Scope: Pluggable stores (memory, Redis, Postgres); checkpoint creation/restore APIs.
-- Deliverables:
+ - Deliverables:
   - Checkpointer plugin interface + Redis/Postgres implementations (JSONB)
   - Replay utility for timeline → state
+ - Status: In progress (in-memory checkpoint store + checkpoint.created control)
 
 Spike 7 — SSE/WS Server + TS SDK v2 (duplex)
 - Goals: Optional transport to consume events and control sessions remotely.
 - Scope: HTTP: create/input/control/state; SSE events; WS bi-directional sessions (send inputs + receive events);
   TS SDK client with types and duplex helpers.
-- Deliverables:
+ - Deliverables:
   - `nomos-server` with `/v2` endpoints
   - `nomos-sdk-ts` streaming client; examples
+ - Status: Pending
 
 Spike 8 — Interrupt Controller + Prioritization
 - Goals: Barge-in, pause/resume/cancel; backpressure policies.
 - Scope: Priority queues; cooperative cancellation across LLM/tools; control commands; policies.
-- Deliverables:
+ - Deliverables:
   - Controller module; tests simulating interrupts mid-stream and mid-tool
+ - Status: In progress (cancel + pause/resume groundwork; cancel tests added)
 
 Spike 9 — Multimodal I/O (Core Contracts)
 - Goals: Content-part model; image/audio support in messages/events.
 - Scope: Content parts (text/image/audio) normalization; payload chunking; optional media adapters (STT/TTS) later.
-- Deliverables:
+ - Deliverables:
   - Content model + adapters in providers; tests with simple image prompts
+ - Status: Pending
 
 Spike 10 — Subgraphs + Agent-as-Tool
 - Goals: Specialization via nested agents; robust adapter to call an Agent like a tool.
 - Scope: as_tool adapter; subgraph lifecycle; resource quotas.
-- Deliverables:
+ - Deliverables:
   - Agent-as-tool wrapper + tests; subgraph example aligned with conceptual sample
+ - Status: Pending
 
 Spike 11 — Observability (Tracing, Metrics, Timeline)
 - Goals: OTEL spans at node/event granularity; metrics; timeline explorer hooks.
 - Scope: Span/link strategy; exporters; sampling; correlation IDs.
-- Deliverables:
+ - Deliverables:
   - `nomos-observe` setup helpers; default spans around LLM/tool/orchestrator; metrics counters/histograms
+ - Status: Pending
 
 Spike 12 — Performance + Scaling
 - Goals: Concurrency tuning; worker pools; backpressure and rate limits.
 - Scope: LLM/tool worker executors; session sharding; token drop strategies for lagging clients.
-- Deliverables:
+ - Deliverables:
   - Benchmarks; config knobs; documentation
+ - Status: Pending
 
 Spike 13 — Security + Governance
 - Goals: Transport auth (JWT/OIDC); rate limiting; tool permissioning; secrets policy.
 - Scope: Server middleware; per-tool ACLs; redaction pipelines for event storage.
-- Deliverables:
+ - Deliverables:
   - Security middleware; tool registry permissions; redaction utilities
+ - Status: Pending
 
 Spike 14 — Developer Experience (CLI, Docs, Examples)
 - Goals: `nomos dev` hot-reload; templates; improved examples and docs.
 - Scope: Reload graph/nodes; local SSE/WS; docs site updates.
-- Deliverables:
+ - Deliverables:
   - Dev CLI; refreshed examples; quickstarts
+ - Status: Pending
 
 Spike 15 — Config / No‑Code Builder (Later)
 - Goals: Optional config compiler generating code from YAML/JSON; UI builder on the same contracts.
 - Scope: Schema; codegen; import/export of graphs.
-- Deliverables:
+ - Deliverables:
   - Config compiler; sample UI (“Nomos Compose”) hooks
+ - Status: Pending
 
 Milestone Grouping & Exit Criteria
 - M1 Foundations (0,1,2): DDD docs signed off; event schema stable; ports defined and contract‑tested.
