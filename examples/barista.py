@@ -21,44 +21,56 @@ load_dotenv()
 # In-memory state (demo only)
 _cart: list[dict] = []
 
+# Create tool runner
+runner = SimpleToolRunner()
 
 # Tools
+@runner.tool("get.options")
 async def get_available_coffee_options():
+    """Get available coffee options."""
     await asyncio.sleep(0)
     opts = [
         {"type": "Espresso", "sizes": ["S", "M", "L"], "prices": [2.5, 3.0, 3.5]},
         {"type": "Latte", "sizes": ["S", "M", "L"], "prices": [3.0, 3.5, 4.0]},
     ]
-    yield {"type": "tool.completed", "result": opts}
+    return opts
 
 
+@runner.tool("add.to.cart")
 async def add_to_cart(coffee_type: str, size: str, price: float):
+    """Add coffee to cart."""
     _cart.append({"coffee_type": coffee_type, "size": size, "price": price})
     await asyncio.sleep(0)
-    yield {"type": "tool.completed", "result": {"ok": True, "count": len(_cart)}}
+    return {"ok": True, "count": len(_cart)}
 
 
+@runner.tool("get.summary")
 async def get_order_summary():
+    """Get order summary."""
     total = sum(i["price"] for i in _cart)
     await asyncio.sleep(0)
-    yield {"type": "tool.completed", "result": {"items": list(_cart), "total": total}}
+    return {"items": list(_cart), "total": total}
 
 
+@runner.tool("clear.cart")
 async def clear_cart():
+    """Clear the cart."""
     _cart.clear()
     await asyncio.sleep(0)
-    yield {"type": "tool.completed", "result": {"ok": True}}
+    return {"ok": True}
 
 
-async def finalize_order(payment_method: str, payment: float | None = None):
-    yield {"type": "tool.progress", "stage": "process_payment"}
-    await asyncio.sleep(0.1)
+@runner.tool("finalize.order", timeout=5)
+def finalize_order(payment_method: str, payment: float | None = None):
+    """Finalizes the Order."""
     total = sum(i["price"] for i in _cart)
-    yield {"type": "tool.stdout", "line": f"total: {total}"}
-    await asyncio.sleep(0.1)
     change = (payment or 0) - total if payment_method == "Cash" else 0
     _cart.clear()
-    yield {"type": "tool.completed", "result": {"ok": True, "change": change}}
+    return {
+        "result": {"ok": True, "change": change},
+        "progress": ["process_payment"],
+        "stdout": [f"total: {total}"]
+    }
 
 
 async def main() -> None:
@@ -140,20 +152,10 @@ async def main() -> None:
 
     spec = g.compile()
 
-    # Tools mapping
-    tools = {
-        "get.options": get_available_coffee_options,
-        "add.to.cart": add_to_cart,
-        "get.summary": get_order_summary,
-        "clear.cart": clear_cart,
-        "finalize.order": finalize_order,
-    }
-    runner = SimpleToolRunner(tools)
-
     # Node overrides for allowed tools
     node_overrides: Dict[str, Dict[str, Any]] = {}
     for node in g._nodes:
-        allowed = {t for t in (node.tools or []) if isinstance(t, str) and t in tools}
+        allowed = {t for t in (node.tools or []) if isinstance(t, str) and t in runner._registry}
         if allowed:
             node_overrides[node.id] = {"allowed_tools": allowed}
 
