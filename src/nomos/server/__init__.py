@@ -16,7 +16,7 @@ import asyncio
 import json
 from typing import Any, AsyncIterator, Dict, Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import StreamingResponse
 
 from nomos.core import Orchestrator
@@ -52,21 +52,35 @@ def create_app(agent: Optional[AgentSpec] = None, *, orchestrator: Optional[Orch
         events = await orch.list_events(session_id=sid)
         return {"session_id": sid, "events": events}
 
-    async def _sse_gen(sid: str) -> AsyncIterator[str]:
-        # Yield existing timeline first so clients see immediate data
+    async def _sse_gen(sid: str, last_event_id: Optional[str] = None) -> AsyncIterator[str]:
+        # Yield existing timeline first (after last_event_id if provided)
         try:
             existing = await orch.list_events(session_id=sid)
         except Exception:
             existing = []
+        # filter by last_event_id if present
+        if last_event_id is not None:
+            def _after(eid: Optional[str]) -> bool:
+                try:
+                    return int((eid or "0")) > int(last_event_id)
+                except Exception:
+                    return True
+            existing = [ev for ev in existing if _after(ev.get("event_id"))]
         for ev in existing:
+            if ev_id := ev.get("event_id"):
+                yield f"id: {ev_id}\n"
             yield f"data: {json.dumps(ev)}\n\n"
         # Then stream new events
         async for ev in orch.stream(session_id=sid):
+            if ev_id := ev.get("event_id"):
+                yield f"id: {ev_id}\n"
             yield f"data: {json.dumps(ev)}\n\n"
 
     @app.get("/v2/sessions/{sid}/events")
-    async def sse(sid: str) -> StreamingResponse:  # noqa: ANN401
-        return StreamingResponse(_sse_gen(sid), media_type="text/event-stream")
+    async def sse(sid: str, request: Request) -> StreamingResponse:  # noqa: ANN401
+        # Support SSE resume via Last-Event-ID
+        last_id = request.headers.get("last-event-id") or request.headers.get("Last-Event-ID")
+        return StreamingResponse(_sse_gen(sid, last_event_id=last_id), media_type="text/event-stream")
 
     @app.websocket("/v2/sessions/{sid}/ws")
     async def ws_endpoint(ws: WebSocket, sid: str) -> None:

@@ -12,7 +12,8 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, PrivateAttr
+from pydantic.config import ConfigDict
 
 from .spec import AgentSpec, EdgeSpec, NodeSpec, compile_agent
 
@@ -20,11 +21,10 @@ from .spec import AgentSpec, EdgeSpec, NodeSpec, compile_agent
 class GraphBuilder(BaseModel):
     name: str
     start: str
-    _nodes: List[NodeSpec] = []  # type: ignore[var-annotated]
-    _edges: List[EdgeSpec] = []  # type: ignore[var-annotated]
+    _nodes: List[NodeSpec] = PrivateAttr(default_factory=list)
+    _edges: List[EdgeSpec] = PrivateAttr(default_factory=list)
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def node(self, id: str, *, prompt: Optional[str] = None) -> "GraphBuilder":  # noqa: A003
         self._nodes.append(NodeSpec(id=id, prompt=prompt))

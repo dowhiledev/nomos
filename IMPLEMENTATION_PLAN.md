@@ -51,7 +51,7 @@ Spike 3 — Async LLM Streaming Adapter (OpenAI)
 - Deliverables:
   - OpenAIProvider adapter with typed outputs
   - Conformance tests (token stream, completion aggregation, errors)
- - Status: In progress (OpenAIProvider adapter added with fake-client test; real client behind optional extra)
+ - Status: In progress (OpenAIProvider adapter added with fake-client tests; basic tool/function-calling deltas aggregated to a TOOL_CALL decision; real client behind optional extra)
 
 Spike 4 — Tool Runner 2.0 (Async, Progress, Cancellation)
 - Goals: Async tool contract with progress/partial outputs; budgets/timeouts; safe execution.
@@ -83,7 +83,7 @@ Spike 7 — WS/SSE Server (duplex)
 - Scope: HTTP: create/input/control/state; WS bi-directional sessions (send inputs + receive events). SSE endpoint provided as best-effort (automated test deferred due to client flakiness).
 - Deliverables:
   - `nomos-server` with `/v2` endpoints (HTTP + WS; SSE provided)
- - Status: In progress (FastAPI app with WS + SSE endpoints; WS/timeline tests added; SSE test skipped for now)
+ - Status: In progress (FastAPI app with WS + SSE endpoints; SSE now emits per-event ids and supports Last-Event-ID resume; WS/timeline tests passing; SSE test remains skipped due to TestClient flakiness)
 
 Spike 8 — Interrupt Controller + Prioritization
 - Goals: Barge-in, pause/resume/cancel; backpressure policies.

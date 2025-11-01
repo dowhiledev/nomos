@@ -178,7 +178,8 @@ Library-First API (primary usage)
 - HTTP:
   - POST /v2/sessions -> create (returns stream URL + snapshot)
   - POST /v2/sessions/{id}/input -> enqueue user input/command (non-blocking)
-  - GET  /v2/sessions/{id}/events -> SSE stream of SessionEvents
+ - GET  /v2/sessions/{id}/events -> SSE stream of SessionEvents
+    - Emits per-event `id` fields for resume; honors `Last-Event-ID` header to replay missed events before live tail.
   - GET  /v2/sessions/{id}/state -> current materialized state
   - POST /v2/sessions/{id}/control -> {cancel, pause, resume, checkpoint}
 - WebSocket:

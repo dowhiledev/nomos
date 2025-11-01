@@ -11,8 +11,15 @@ class InMemoryEventStore:
     def __init__(self) -> None:
         self._events: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
         self._queues: Dict[str, asyncio.Queue[Dict[str, Any]]] = defaultdict(asyncio.Queue)
+        # per-session monotonically increasing event sequence for SSE ids
+        self._seqs: Dict[str, int] = defaultdict(int)
 
     async def append(self, session_id: str, events: List[Dict[str, Any]]) -> None:
+        # assign event ids if not present to support SSE resume
+        for ev in events:
+            if not ev.get("event_id"):
+                self._seqs[session_id] += 1
+                ev["event_id"] = str(self._seqs[session_id])
         self._events[session_id].extend(events)
         for ev in events:
             await self._queues[session_id].put(ev)
@@ -31,4 +38,3 @@ class InMemoryEventStore:
 
 
 __all__ = ["InMemoryEventStore"]
-

@@ -9,6 +9,7 @@ Note: Function/tool-calling is out of scope for this initial adapter.
 from __future__ import annotations
 
 from typing import Any, AsyncIterator, Dict, List, Optional
+import json
 
 from nomos.core.events import EventType
 from nomos.core.ports import LLMProviderPort
@@ -63,8 +64,9 @@ class OpenAIProvider(LLMProviderPort):
         oai_messages = _to_openai_messages(messages)
         # Start streaming chat completion
         stream = client.chat.completions.create(model=self._model, messages=oai_messages, stream=True)
-        # Aggregate the full text to yield a final decision
+        # Aggregate the full text to yield a final RESPOND decision, or collect tool_call deltas
         full_text: List[str] = []
+        tool_calls: Dict[int, Dict[str, Any]] = {}
         # The iterator is synchronous; bridge into async context
         for chunk in stream:
             try:
@@ -72,21 +74,71 @@ class OpenAIProvider(LLMProviderPort):
                 delta = getattr(choice, "delta", None)
                 if delta is None:
                     delta = choice.get("delta")  # type: ignore[attr-defined]
-                content = getattr(delta, "content", None) if delta is not None else None
+            except Exception:  # pragma: no cover - tolerate shape variance
+                delta = None
+
+            # Handle streaming content tokens
+            content = None
+            if delta is not None:
+                content = getattr(delta, "content", None)
                 if content is None and isinstance(delta, dict):
                     content = delta.get("content")
-            except Exception:  # pragma: no cover - tolerate shape variance
-                content = None
             if content:
                 full_text.append(content)
                 yield {"type": EventType.TOKEN_EMITTED.value, "data": {"role": "assistant", "delta": content}}
 
-        # final decision
-        response_text = "".join(full_text)
-        yield {
-            "type": EventType.DECISION_COMPLETED.value,
-            "data": {"action": "RESPOND", "response": response_text},
-        }
+            # Handle function/tool-calling deltas
+            tool_delta = None
+            if delta is not None:
+                tool_delta = getattr(delta, "tool_calls", None)
+                if tool_delta is None and isinstance(delta, dict):
+                    tool_delta = delta.get("tool_calls")
+            if tool_delta:
+                for item in tool_delta:
+                    try:
+                        idx = getattr(item, "index", None)
+                    except Exception:
+                        idx = item.get("index") if isinstance(item, dict) else None
+                    try:
+                        func = getattr(item, "function", None)
+                        if func is None and isinstance(item, dict):
+                            func = item.get("function")
+                        name = getattr(func, "name", None) if func is not None else None
+                        if name is None and isinstance(func, dict):
+                            name = func.get("name")
+                        args_delta = getattr(func, "arguments", None) if func is not None else None
+                        if args_delta is None and isinstance(func, dict):
+                            args_delta = func.get("arguments")
+                    except Exception:  # pragma: no cover
+                        name = None
+                        args_delta = None
+                    if idx is None:
+                        idx = 0
+                    entry = tool_calls.setdefault(int(idx), {"name": name or "", "arguments": ""})
+                    if name:
+                        entry["name"] = name
+                    if args_delta:
+                        entry["arguments"] = entry.get("arguments", "") + str(args_delta)
+
+        # final decision: prefer tool_call if present, else respond text
+        if tool_calls:
+            first = tool_calls[sorted(tool_calls.keys())[0]]
+            tool_name = first.get("name") or ""
+            raw_args = first.get("arguments") or ""
+            try:
+                tool_kwargs = json.loads(raw_args) if raw_args else {}
+            except Exception:
+                tool_kwargs = {"__raw__": raw_args}
+            yield {
+                "type": EventType.DECISION_COMPLETED.value,
+                "data": {"action": "TOOL_CALL", "tool_call": {"tool_name": tool_name, "tool_kwargs": tool_kwargs}},
+            }
+        else:
+            response_text = "".join(full_text)
+            yield {
+                "type": EventType.DECISION_COMPLETED.value,
+                "data": {"action": "RESPOND", "response": response_text},
+            }
 
     async def stream_generate(self, messages: List[Dict[str, Any]]) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
         # Implement in terms of stream_decision and pass through token events only
@@ -96,4 +148,3 @@ class OpenAIProvider(LLMProviderPort):
 
 
 __all__ = ["OpenAIProvider"]
-
