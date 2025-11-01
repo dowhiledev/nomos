@@ -10,15 +10,23 @@ class StreamingProvider:
         # 5 tokens then a completion
         for ch in ["A", "B", "C", "D", "E"]:
             await asyncio.sleep(0.01)
-            yield {"type": EventType.TOKEN_EMITTED.value, "data": {"role": "assistant", "delta": ch}}
-        yield {"type": EventType.DECISION_COMPLETED.value, "data": {"action": "RESPOND", "response": "ABCDE"}}
+            yield {
+                "type": EventType.TOKEN_EMITTED.value,
+                "data": {"role": "assistant", "delta": ch},
+            }
+        yield {
+            "type": EventType.DECISION_COMPLETED.value,
+            "data": {"action": "RESPOND", "response": "ABCDE"},
+        }
 
 
 @pytest.mark.asyncio
 async def test_pause_and_resume_blocks_and_resumes_tokens():
     orch = Orchestrator(agent=None, provider=StreamingProvider())
     session = await orch.create_session()
-    inputs = {"messages": [{"role": "user", "content": [{"type": "text", "data": "stream"}]}]}
+    inputs = {
+        "messages": [{"role": "user", "content": [{"type": "text", "data": "stream"}]}]
+    }
 
     tokens = []
     paused = False
@@ -30,12 +38,16 @@ async def test_pause_and_resume_blocks_and_resumes_tokens():
             if ev["type"] == EventType.TOKEN_EMITTED.value:
                 tokens.append(ev["data"]["delta"])
                 if len(tokens) == 1 and not paused:
-                    await orch.control(session_id=session.id, command={"type": "pause.requested"})
+                    await orch.control(
+                        session_id=session.id, command={"type": "pause.requested"}
+                    )
                     paused = True
                     # Wait a bit; should not get another token while paused
                     await asyncio.sleep(0.04)
                     current_count = len(tokens)
-                    await orch.control(session_id=session.id, command={"type": "resume.requested"})
+                    await orch.control(
+                        session_id=session.id, command={"type": "resume.requested"}
+                    )
                     resumed = True
                     # After resume, more tokens should arrive later; ensure count unchanged immediately
                     assert len(tokens) == current_count
@@ -45,4 +57,3 @@ async def test_pause_and_resume_blocks_and_resumes_tokens():
     await consume()
     assert paused and resumed
     assert len(tokens) >= 2
-

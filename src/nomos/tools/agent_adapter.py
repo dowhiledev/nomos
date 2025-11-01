@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Optional
+from typing import Any, AsyncIterator, Callable, Dict, Optional
 
 from nomos.core import Orchestrator
 from nomos.core.events import EventType
@@ -23,14 +23,21 @@ def as_tool(
     It expects `messages` (list) in kwargs, and an optional `ctx` containing `cancel_event`.
     """
 
-    async def _tool_fn(*, messages: list[dict], ctx: Optional[Dict[str, Any]] = None, **_: Any) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
+    async def _tool_fn(
+        *, messages: list[dict], ctx: Optional[Dict[str, Any]] = None, **_: Any
+    ) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
         ctx = ctx or {}
         cancel_event = ctx.get("cancel_event")
         orch = Orchestrator(agent=agent, provider=provider, tool_runner=tool_runner)
         session = await orch.create_session()
         # Start streaming the sub-agent
-        async for ev in orch.stream(session_id=session.id, inputs={"messages": messages}):
-            if cancel_event is not None and getattr(cancel_event, "is_set", lambda: False)():
+        async for ev in orch.stream(
+            session_id=session.id, inputs={"messages": messages}
+        ):
+            if (
+                cancel_event is not None
+                and getattr(cancel_event, "is_set", lambda: False)()
+            ):
                 yield {"type": "tool.error", "error": "cancelled"}
                 return
             et = ev.get("type")
@@ -47,4 +54,3 @@ def as_tool(
 
 
 __all__ = ["as_tool"]
-

@@ -10,15 +10,25 @@ class SlowTokenProvider:
         # Emit multiple tokens slowly; never completes unless not cancelled
         for ch in ["H", "e", "l", "l", "o"]:
             await asyncio.sleep(0.01)
-            yield {"type": EventType.TOKEN_EMITTED.value, "data": {"role": "assistant", "delta": ch}}
-        yield {"type": EventType.DECISION_COMPLETED.value, "data": {"action": "RESPOND", "response": "Hello"}}
+            yield {
+                "type": EventType.TOKEN_EMITTED.value,
+                "data": {"role": "assistant", "delta": ch},
+            }
+        yield {
+            "type": EventType.DECISION_COMPLETED.value,
+            "data": {"action": "RESPOND", "response": "Hello"},
+        }
 
 
 @pytest.mark.asyncio
 async def test_cancel_mid_tokens():
     orch = Orchestrator(agent=None, provider=SlowTokenProvider())
     session = await orch.create_session()
-    inputs = {"messages": [{"role": "user", "content": [{"type": "text", "data": "say hello"}]}]}
+    inputs = {
+        "messages": [
+            {"role": "user", "content": [{"type": "text", "data": "say hello"}]}
+        ]
+    }
 
     tokens = []
     cancel_sent = False
@@ -29,11 +39,12 @@ async def test_cancel_mid_tokens():
                 tokens.append(ev["data"]["delta"])
                 nonlocal cancel_sent
                 if not cancel_sent:
-                    await orch.control(session_id=session.id, command={"type": "cancel.requested"})
+                    await orch.control(
+                        session_id=session.id, command={"type": "cancel.requested"}
+                    )
                     cancel_sent = True
             if ev["type"] == EventType.CANCEL_APPLIED.value:
                 return
 
     await consume()
     assert tokens  # at least one token before cancel
-

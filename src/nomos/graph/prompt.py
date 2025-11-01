@@ -6,7 +6,7 @@ helping the model choose the next step (Decision.MOVE.step_id).
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List
 
 from .spec import AgentSpec
 
@@ -22,4 +22,3 @@ def edge_conditions_for_prompt(spec: AgentSpec, current: str) -> str:
 
 
 __all__ = ["edge_conditions_for_prompt"]
-

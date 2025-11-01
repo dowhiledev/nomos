@@ -28,7 +28,9 @@ class FakeOpenAIClientMalformed:
         def create(self, *, model, messages, stream):  # noqa: ANN001
             assert stream is True
             # malformed JSON across chunks
-            d1 = _Delta([_ToolCallFn(0, name="web.search", arguments='{"query": "tokyo')])
+            d1 = _Delta(
+                [_ToolCallFn(0, name="web.search", arguments='{"query": "tokyo')]
+            )
             d2 = _Delta([_ToolCallFn(0, name="web.search", arguments='"')])
             return iter([_Chunk(d1), _Chunk(d2)])
 
@@ -44,9 +46,10 @@ class FakeOpenAIClientMalformed:
 async def test_openai_provider_tool_call_malformed_args_raw_fallback():
     provider = OpenAIProvider(model="gpt-4o-mini", client=FakeOpenAIClientMalformed())
     frames = []
-    async for f in provider.stream_decision([{"role": "user", "content": [{"type": "text", "data": "hi"}]}], schema=None):
+    async for f in provider.stream_decision(
+        [{"role": "user", "content": [{"type": "text", "data": "hi"}]}], schema=None
+    ):
         frames.append(f)
     call = frames[-1]["data"]["tool_call"]
     assert call["tool_name"] == "web.search"
     assert "__raw__" in call["tool_kwargs"]
-

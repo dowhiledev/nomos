@@ -19,4 +19,3 @@ async def test_simple_tool_runner_streams_frames():
     assert frames[0]["type"] == "tool.started"
     assert any(f["type"] == "tool.progress" for f in frames)
     assert frames[-1]["type"] == "tool.completed"
-

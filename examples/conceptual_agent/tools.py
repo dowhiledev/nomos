@@ -9,7 +9,10 @@ from __future__ import annotations
 import asyncio
 from typing import AsyncIterator, Dict
 
-async def web_search(query: str, top_k: int = 5, ctx: Dict | None = None) -> AsyncIterator[Dict]:
+
+async def web_search(
+    query: str, top_k: int = 5, ctx: Dict | None = None
+) -> AsyncIterator[Dict]:
     """Search the web and yield progress.
 
     Yields:
@@ -34,10 +37,14 @@ async def web_search(query: str, top_k: int = 5, ctx: Dict | None = None) -> Asy
     yield {
         "type": "tool.completed",
         "results": [
-            {"title": f"Result {i+1} for {query}", "url": f"https://example.com/{i+1}"}
+            {
+                "title": f"Result {i + 1} for {query}",
+                "url": f"https://example.com/{i + 1}",
+            }
             for i in range(top_k)
         ],
     }
+
 
 async def db_query(dsn: str, sql: str, ctx: Dict | None = None) -> AsyncIterator[Dict]:
     """Run a SQL query; stream progress and rows."""

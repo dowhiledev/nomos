@@ -12,4 +12,3 @@ async def test_checkpoint_store_save_and_load():
     loaded = await store.load(session_id, "cp1")
     assert loaded["node_id"] == "n1"
     assert loaded["data"]["k"] == "v"
-

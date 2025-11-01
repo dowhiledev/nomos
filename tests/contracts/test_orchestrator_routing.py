@@ -7,7 +7,10 @@ from nomos.graph import AgentSpec, EdgeSpec, NodeSpec
 class FakeProviderMove:
     async def stream_decision(self, messages, schema):  # type: ignore[no-untyped-def]
         # Immediately emit a MOVE decision to 'next'
-        yield {"type": "decision.completed", "data": {"action": "MOVE", "step_id": "next"}}
+        yield {
+            "type": "decision.completed",
+            "data": {"action": "MOVE", "step_id": "next"},
+        }
 
 
 @pytest.mark.asyncio
@@ -21,7 +24,9 @@ async def test_orchestrator_applies_routing_and_updates_state():
     orch = Orchestrator(agent=agent, provider=FakeProviderMove())
     session = await orch.create_session()
 
-    inputs = {"messages": [{"role": "user", "content": [{"type": "text", "data": "go"}]}]}
+    inputs = {
+        "messages": [{"role": "user", "content": [{"type": "text", "data": "go"}]}]
+    }
 
     routed = False
 
@@ -36,4 +41,3 @@ async def test_orchestrator_applies_routing_and_updates_state():
     assert routed
     st = await orch.materialize_state(session_id=session.id)
     assert st["current_node"] == "next"
-

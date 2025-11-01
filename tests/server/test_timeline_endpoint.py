@@ -8,7 +8,10 @@ from nomos.core import Orchestrator
 class Provider:
     async def stream_decision(self, messages, schema):  # type: ignore[no-untyped-def]
         # trivial immediate respond
-        yield {"type": "decision.completed", "data": {"action": "RESPOND", "response": "ok"}}
+        yield {
+            "type": "decision.completed",
+            "data": {"action": "RESPOND", "response": "ok"},
+        }
 
 
 @pytest.mark.asyncio
@@ -19,10 +22,13 @@ async def test_timeline_endpoint_lists_events():
     sid = client.post("/v2/sessions").json()["session_id"]
     client.post(
         f"/v2/sessions/{sid}/input",
-        json={"messages": [{"role": "user", "content": [{"type": "text", "data": "hello"}]}]},
+        json={
+            "messages": [
+                {"role": "user", "content": [{"type": "text", "data": "hello"}]}
+            ]
+        },
     )
     timeline = client.get(f"/v2/sessions/{sid}/timeline").json()
     types = [ev["type"] for ev in timeline["events"]]
     assert "session.created" in types
     assert "input.enqueued" in types
-

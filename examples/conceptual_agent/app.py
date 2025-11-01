@@ -16,14 +16,22 @@ from examples.conceptual_agent.tools import web_search
 
 
 class DemoProvider:
-    async def stream_decision(self, messages: List[Dict[str, Any]], schema: Any) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
+    async def stream_decision(
+        self, messages: List[Dict[str, Any]], schema: Any
+    ) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
         # Emit a token and then ask to call the web.search tool
-        yield {"type": EventType.TOKEN_EMITTED.value, "data": {"role": "assistant", "delta": "Working... "}}
+        yield {
+            "type": EventType.TOKEN_EMITTED.value,
+            "data": {"role": "assistant", "delta": "Working... "},
+        }
         yield {
             "type": EventType.DECISION_COMPLETED.value,
             "data": {
                 "action": "TOOL_CALL",
-                "tool_call": {"tool_name": "web.search", "tool_kwargs": {"query": "Tokyo budget itinerary", "top_k": 3}},
+                "tool_call": {
+                    "tool_name": "web.search",
+                    "tool_kwargs": {"query": "Tokyo budget itinerary", "top_k": 3},
+                },
             },
         }
         # After tool completes, provider would normally be called again. For demo, finish here.
@@ -31,7 +39,11 @@ class DemoProvider:
 
 async def main() -> None:
     # No graph routing needed for MVP demo; focus on streaming + tool call
-    orch = Orchestrator(agent=None, provider=DemoProvider(), tool_runner=SimpleToolRunner({"web.search": web_search}))
+    orch = Orchestrator(
+        agent=None,
+        provider=DemoProvider(),
+        tool_runner=SimpleToolRunner({"web.search": web_search}),
+    )
 
     # Multimodal input: text + image
     inputs = {
@@ -40,7 +52,11 @@ async def main() -> None:
                 "role": "user",
                 "content": [
                     {"type": "text", "data": "Plan a 3-day Tokyo trip under $1500"},
-                    {"type": "image", "data": {"url": "https://example.com/tokyo.jpg"}, "mime": "image/jpeg"},
+                    {
+                        "type": "image",
+                        "data": {"url": "https://example.com/tokyo.jpg"},
+                        "mime": "image/jpeg",
+                    },
                 ],
             }
         ]
@@ -56,7 +72,7 @@ async def main() -> None:
             if evt["type"] == "tool.completed":
                 break
         elif evt["type"] == EventType.DECISION_COMPLETED.value:
-            print("\n[done]", evt["data"]) 
+            print("\n[done]", evt["data"])
             break
 
 

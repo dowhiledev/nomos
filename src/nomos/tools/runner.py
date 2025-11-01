@@ -24,11 +24,15 @@ ToolCallable = Callable[..., Any]
 
 
 class SimpleToolRunner(ToolRunnerPort):
-    def __init__(self, registry: Dict[str, ToolCallable], *, timeout_s: float | None = None) -> None:
+    def __init__(
+        self, registry: Dict[str, ToolCallable], *, timeout_s: float | None = None
+    ) -> None:
         self._registry = registry
         self._timeout = timeout_s
 
-    async def run(self, tool_name: str, args: Dict[str, Any], ctx: Dict[str, Any]) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
+    async def run(
+        self, tool_name: str, args: Dict[str, Any], ctx: Dict[str, Any]
+    ) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
         fn = self._registry.get(tool_name)
         if not fn:
             yield {"type": "tool.error", "tool": tool_name, "error": "unknown tool"}
@@ -40,7 +44,9 @@ class SimpleToolRunner(ToolRunnerPort):
             try:
                 sig = inspect.signature(fn)
                 params = sig.parameters
-                if "ctx" in params or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()):
+                if "ctx" in params or any(
+                    p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()
+                ):
                     call_kwargs["ctx"] = ctx
             except Exception:
                 # best-effort; fall back to not passing ctx
@@ -71,10 +77,23 @@ class SimpleToolRunner(ToolRunnerPort):
             yield {"type": "tool.error", "tool": tool_name, "error": "timeout"}
 
 
-async def _iterate_with_timeout(agen: AsyncIterator[Dict[str, Any]], timeout: float) -> AsyncIterator[Dict[str, Any]]:
-    async for item in agen:
-        # apply timeout per frame delivery
-        yield await asyncio.wait_for(asyncio.sleep(0, result=item), timeout=timeout)
+async def _iterate_with_timeout(
+    agen: AsyncIterator[Dict[str, Any]], timeout: float
+) -> AsyncIterator[Dict[str, Any]]:
+    """Iterate an async generator with a timeout applied to awaiting the next item."""
+    try:
+        anext = agen.__anext__  # type: ignore[attr-defined]
+    except AttributeError:  # pragma: no cover - defensive
+        # Fallback: consume via async for but timeout cannot be enforced between yields
+        async for item in agen:
+            yield item
+        return
+    while True:
+        try:
+            item = await asyncio.wait_for(anext(), timeout=timeout)
+        except StopAsyncIteration:
+            break
+        yield item
 
 
 __all__ = ["SimpleToolRunner"]

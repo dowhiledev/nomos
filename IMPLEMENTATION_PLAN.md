@@ -51,7 +51,9 @@ Spike 3 — Async LLM Streaming Adapter (OpenAI)
 - Deliverables:
   - OpenAIProvider adapter with typed outputs
   - Conformance tests (token stream, completion aggregation, errors)
- - Status: In progress (OpenAIProvider adapter added with fake-client tests; basic tool/function-calling deltas aggregated to a TOOL_CALL decision; real client behind optional extra)
+ - Status: Completed
+   - OpenAIProvider supports token streaming, RESPOND aggregation, basic tool/function-calling deltas → TOOL_CALL.
+   - Content-parts mapping implemented (text, image-url). Error behavior covered via fake/malformed clients. Real client behind optional extra.
 
 Spike 4 — Tool Runner 2.0 (Async, Progress, Cancellation)
 - Goals: Async tool contract with progress/partial outputs; budgets/timeouts; safe execution.
@@ -59,7 +61,9 @@ Spike 4 — Tool Runner 2.0 (Async, Progress, Cancellation)
  - Deliverables:
   - `nomos-tools` runner; progress events (`tool.started|progress|stdout|completed|error`)
   - Budget/timeout enforcement; structured errors; unit tests
- - Status: In progress (SimpleToolRunner passes ctx to tools; orchestrator propagates cancel via session-level cancel_event; mid-tool cancellation test added; timeouts supported per runner)
+ - Status: Completed
+   - SimpleToolRunner supports async generators and coroutines; passes ctx (including cancel_event) to tools.
+   - Per-frame timeout enforced; unknown tools yield structured errors; mid-tool cancel tested via orchestrator cancel.
 
 Spike 5 — Graph Runtime MVP (Nodes Only)
 - Goals: Compose nodes and edges; compile() → Agent; execute via orchestrator.
@@ -68,7 +72,9 @@ Spike 5 — Graph Runtime MVP (Nodes Only)
   - Graph builder with validation (no dangling nodes; legal conditions)
   - Compile to Agent (serializable definition)
   - Example parity with `examples/conceptual_agent/graph.py`
- - Status: In progress (AgentSpec with MOVE/RESPOND/END matching; validation + builder DSL added)
+ - Status: Completed
+   - AgentSpec with MOVE/RESPOND routing; validation (dangling edges, reachability, duplicates).
+   - Builder DSL fixed for Pydantic v2 and isolation; prompt helper added; tests for builder isolation.
 
 Spike 6 — Checkpointing + Replay
 - Goals: Deterministic recovery; event-log → state reconstruction; node-boundary checkpoints.
@@ -76,7 +82,9 @@ Spike 6 — Checkpointing + Replay
  - Deliverables:
   - Checkpointer plugin interface + Redis/Postgres implementations (JSONB)
   - Replay utility for timeline → state
- - Status: In progress (in-memory checkpoint store + checkpoint.created/control + restore + replay util)
+ - Status: Completed
+   - In-memory checkpoint store and APIs for create/restore; events emitted.
+   - Replay utility projects timeline → state; parity verified with materialized state.
 
 Spike 7 — WS/SSE Server (duplex)
 - Goals: Optional transport to consume events and control sessions remotely.

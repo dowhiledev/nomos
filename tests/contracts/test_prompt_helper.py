@@ -15,4 +15,3 @@ def test_edge_conditions_for_prompt_lists_targets():
     txt = edge_conditions_for_prompt(spec, "start")
     assert "to 'end': user wants to finish" in txt
     assert "to 'loop': needs more info" in txt
-

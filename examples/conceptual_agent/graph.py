@@ -10,7 +10,6 @@ Notes applied:
 
 from __future__ import annotations
 
-from typing import Any
 
 from nomos.graph import Graph, LLMNode, Edge, as_tool  # provided by vNext
 from nomos.core import Agent  # compiled output type
@@ -37,8 +36,12 @@ def make_specialist_agent() -> Agent:
                 prompt="Summarize findings concisely for parent agent",
             ),
         )
-        .edge(Edge("specialist.research", "specialist.research", when="MOVE:iterate"))  # cycle
-        .edge(Edge("specialist.research", "specialist.summarize", when="MOVE:summarize"))
+        .edge(
+            Edge("specialist.research", "specialist.research", when="MOVE:iterate")
+        )  # cycle
+        .edge(
+            Edge("specialist.research", "specialist.summarize", when="MOVE:summarize")
+        )
         .compile()
     )
     # compile() returns an Agent (library behavior)

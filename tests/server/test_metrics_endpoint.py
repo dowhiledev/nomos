@@ -10,4 +10,3 @@ def test_metrics_endpoint_returns_snapshot():
     assert resp.status_code == 200
     data = resp.json()
     assert "counters" in data and "latency_avg" in data
-

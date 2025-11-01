@@ -26,4 +26,3 @@ def project_state(session_id: str, events: List[Dict[str, Any]]) -> Dict[str, An
 
 
 __all__ = ["project_state"]
-

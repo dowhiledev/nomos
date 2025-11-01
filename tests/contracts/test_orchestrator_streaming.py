@@ -8,11 +8,22 @@ from nomos.core.events import EventType
 
 
 class FakeProvider:
-    async def stream_decision(self, messages: List[Dict[str, Any]], schema: Any) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
-        yield {"type": EventType.TOKEN_EMITTED.value, "data": {"role": "assistant", "delta": "Hello "}}
+    async def stream_decision(
+        self, messages: List[Dict[str, Any]], schema: Any
+    ) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
+        yield {
+            "type": EventType.TOKEN_EMITTED.value,
+            "data": {"role": "assistant", "delta": "Hello "},
+        }
         await asyncio.sleep(0.005)
-        yield {"type": EventType.TOKEN_EMITTED.value, "data": {"role": "assistant", "delta": "world"}}
-        yield {"type": EventType.DECISION_COMPLETED.value, "data": {"action": "RESPOND", "response": "Hello world"}}
+        yield {
+            "type": EventType.TOKEN_EMITTED.value,
+            "data": {"role": "assistant", "delta": "world"},
+        }
+        yield {
+            "type": EventType.DECISION_COMPLETED.value,
+            "data": {"action": "RESPOND", "response": "Hello world"},
+        }
 
 
 @pytest.mark.asyncio
@@ -20,7 +31,9 @@ async def test_orchestrator_streams_provider_events():
     orch = Orchestrator(agent=None, provider=FakeProvider())
     session = await orch.create_session()
 
-    inputs = {"messages": [{"role": "user", "content": [{"type": "text", "data": "hi"}]}]}
+    inputs = {
+        "messages": [{"role": "user", "content": [{"type": "text", "data": "hi"}]}]
+    }
 
     tokens = []
     decision = None
@@ -37,4 +50,3 @@ async def test_orchestrator_streams_provider_events():
     await consume()
     assert tokens
     assert decision and decision.get("action") == "RESPOND"
-

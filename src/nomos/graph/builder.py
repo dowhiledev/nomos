@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, PrivateAttr
 from pydantic.config import ConfigDict
 
 from .spec import AgentSpec, EdgeSpec, NodeSpec, compile_agent
@@ -30,12 +30,19 @@ class GraphBuilder(BaseModel):
         self._nodes.append(NodeSpec(id=id, prompt=prompt))
         return self
 
-    def edge(self, from_id: str, to_id: str, *, condition: Optional[str] = None) -> "GraphBuilder":
+    def edge(
+        self, from_id: str, to_id: str, *, condition: Optional[str] = None
+    ) -> "GraphBuilder":
         self._edges.append(EdgeSpec(from_id=from_id, to_id=to_id, condition=condition))
         return self
 
     def compile(self) -> AgentSpec:
-        spec = AgentSpec(name=self.name, start=self.start, nodes=list(self._nodes), edges=list(self._edges))
+        spec = AgentSpec(
+            name=self.name,
+            start=self.start,
+            nodes=list(self._nodes),
+            edges=list(self._edges),
+        )
         return compile_agent(spec)
 
 

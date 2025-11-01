@@ -1,6 +1,4 @@
-import pytest
-
-from nomos.core.observe import inc, measure, LATENCY_HIST
+from nomos.core.observe import measure, LATENCY_HIST
 
 
 def test_measure_records_latency():
@@ -9,4 +7,3 @@ def test_measure_records_latency():
         pass
     assert "unit.test.work" in LATENCY_HIST
     assert len(LATENCY_HIST["unit.test.work"]) >= 1
-

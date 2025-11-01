@@ -24,7 +24,9 @@ from nomos.core.observe import metrics_snapshot
 from nomos.graph import AgentSpec
 
 
-def create_app(agent: Optional[AgentSpec] = None, *, orchestrator: Optional[Orchestrator] = None) -> FastAPI:
+def create_app(
+    agent: Optional[AgentSpec] = None, *, orchestrator: Optional[Orchestrator] = None
+) -> FastAPI:
     orch = orchestrator or Orchestrator(agent=agent)
 
     app = FastAPI(title="Nomos vNext Server", version="0.1.0")
@@ -57,7 +59,9 @@ def create_app(agent: Optional[AgentSpec] = None, *, orchestrator: Optional[Orch
     async def get_metrics() -> Dict[str, Any]:  # noqa: ANN401
         return metrics_snapshot()
 
-    async def _sse_gen(sid: str, last_event_id: Optional[str] = None) -> AsyncIterator[str]:
+    async def _sse_gen(
+        sid: str, last_event_id: Optional[str] = None
+    ) -> AsyncIterator[str]:
         # Yield existing timeline first (after last_event_id if provided)
         try:
             existing = await orch.list_events(session_id=sid)
@@ -65,11 +69,13 @@ def create_app(agent: Optional[AgentSpec] = None, *, orchestrator: Optional[Orch
             existing = []
         # filter by last_event_id if present
         if last_event_id is not None:
+
             def _after(eid: Optional[str]) -> bool:
                 try:
                     return int((eid or "0")) > int(last_event_id)
                 except Exception:
                     return True
+
             existing = [ev for ev in existing if _after(ev.get("event_id"))]
         for ev in existing:
             if ev_id := ev.get("event_id"):
@@ -84,8 +90,12 @@ def create_app(agent: Optional[AgentSpec] = None, *, orchestrator: Optional[Orch
     @app.get("/v2/sessions/{sid}/events")
     async def sse(sid: str, request: Request) -> StreamingResponse:  # noqa: ANN401
         # Support SSE resume via Last-Event-ID
-        last_id = request.headers.get("last-event-id") or request.headers.get("Last-Event-ID")
-        return StreamingResponse(_sse_gen(sid, last_event_id=last_id), media_type="text/event-stream")
+        last_id = request.headers.get("last-event-id") or request.headers.get(
+            "Last-Event-ID"
+        )
+        return StreamingResponse(
+            _sse_gen(sid, last_event_id=last_id), media_type="text/event-stream"
+        )
 
     @app.websocket("/v2/sessions/{sid}/ws")
     async def ws_endpoint(ws: WebSocket, sid: str) -> None:
@@ -102,7 +112,9 @@ def create_app(agent: Optional[AgentSpec] = None, *, orchestrator: Optional[Orch
                 try:
                     msg = json.loads(msg_text)
                 except Exception:
-                    await ws.send_text(json.dumps({"type": "error", "message": "invalid json"}))
+                    await ws.send_text(
+                        json.dumps({"type": "error", "message": "invalid json"})
+                    )
                     continue
                 mtype = msg.get("type")
                 if mtype == "input":
@@ -110,7 +122,9 @@ def create_app(agent: Optional[AgentSpec] = None, *, orchestrator: Optional[Orch
                 elif mtype == "control":
                     await orch.control(session_id=sid, command=msg.get("payload", {}))
                 else:
-                    await ws.send_text(json.dumps({"type": "error", "message": "unknown message type"}))
+                    await ws.send_text(
+                        json.dumps({"type": "error", "message": "unknown message type"})
+                    )
         except WebSocketDisconnect:
             sender.cancel()
         except Exception:

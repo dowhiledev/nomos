@@ -9,7 +9,9 @@ from nomos.tools.runner import SimpleToolRunner
 
 
 class ProviderWithToolCall:
-    async def stream_decision(self, messages: List[Dict[str, Any]], schema: Any) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
+    async def stream_decision(
+        self, messages: List[Dict[str, Any]], schema: Any
+    ) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
         # Immediately request a tool call
         yield {
             "type": EventType.DECISION_COMPLETED.value,
@@ -36,9 +38,15 @@ async def slow_tool(n: int, ctx: Dict[str, Any] | None = None):  # type: ignore[
 
 @pytest.mark.asyncio
 async def test_cancel_mid_tool_propagates_and_stops_stream():
-    orch = Orchestrator(agent=None, provider=ProviderWithToolCall(), tool_runner=SimpleToolRunner({"slow.tool": slow_tool}))
+    orch = Orchestrator(
+        agent=None,
+        provider=ProviderWithToolCall(),
+        tool_runner=SimpleToolRunner({"slow.tool": slow_tool}),
+    )
     session = await orch.create_session()
-    inputs = {"messages": [{"role": "user", "content": [{"type": "text", "data": "go"}]}]}
+    inputs = {
+        "messages": [{"role": "user", "content": [{"type": "text", "data": "go"}]}]
+    }
 
     saw_progress = False
     saw_tool_end = False
@@ -49,12 +57,17 @@ async def test_cancel_mid_tool_propagates_and_stops_stream():
             if ev["type"] == "tool.progress":
                 saw_progress = True
                 # issue cancel once we see progress
-                await orch.control(session_id=session.id, command={"type": "cancel.requested"})
-            if ev["type"] in ("tool.error", "tool.completed", EventType.CANCEL_APPLIED.value):
+                await orch.control(
+                    session_id=session.id, command={"type": "cancel.requested"}
+                )
+            if ev["type"] in (
+                "tool.error",
+                "tool.completed",
+                EventType.CANCEL_APPLIED.value,
+            ):
                 saw_tool_end = True
                 return
 
     await consume()
     assert saw_progress
     assert saw_tool_end
-

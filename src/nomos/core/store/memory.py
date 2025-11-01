@@ -10,7 +10,9 @@ from typing import Any, AsyncIterator, Dict, List
 class InMemoryEventStore:
     def __init__(self) -> None:
         self._events: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
-        self._queues: Dict[str, asyncio.Queue[Dict[str, Any]]] = defaultdict(asyncio.Queue)
+        self._queues: Dict[str, asyncio.Queue[Dict[str, Any]]] = defaultdict(
+            asyncio.Queue
+        )
         # per-session monotonically increasing event sequence for SSE ids
         self._seqs: Dict[str, int] = defaultdict(int)
 

@@ -27,4 +27,3 @@ async def test_event_store_append_and_subscribe():
     collected = results[1]
     assert collected[0]["type"] == "x"
     assert collected[1]["type"] == "y"
-

@@ -11,19 +11,35 @@ from nomos.tools.runner import SimpleToolRunner
 
 
 class ParentProvider:
-    async def stream_decision(self, messages: List[Dict[str, Any]], schema: Any) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
+    async def stream_decision(
+        self, messages: List[Dict[str, Any]], schema: Any
+    ) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
         # Ask to call the sub-agent tool
         yield {
             "type": EventType.DECISION_COMPLETED.value,
-            "data": {"action": "TOOL_CALL", "tool_call": {"tool_name": "sub.agent", "tool_kwargs": {"messages": messages}}},
+            "data": {
+                "action": "TOOL_CALL",
+                "tool_call": {
+                    "tool_name": "sub.agent",
+                    "tool_kwargs": {"messages": messages},
+                },
+            },
         }
 
 
 class ChildProvider:
-    async def stream_decision(self, messages: List[Dict[str, Any]], schema: Any) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
-        yield {"type": EventType.TOKEN_EMITTED.value, "data": {"role": "assistant", "delta": "nested..."}}
+    async def stream_decision(
+        self, messages: List[Dict[str, Any]], schema: Any
+    ) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
+        yield {
+            "type": EventType.TOKEN_EMITTED.value,
+            "data": {"role": "assistant", "delta": "nested..."},
+        }
         await asyncio.sleep(0.001)
-        yield {"type": EventType.DECISION_COMPLETED.value, "data": {"action": "RESPOND", "response": "nested ok"}}
+        yield {
+            "type": EventType.DECISION_COMPLETED.value,
+            "data": {"action": "RESPOND", "response": "nested ok"},
+        }
 
 
 @pytest.mark.asyncio
@@ -45,7 +61,14 @@ async def test_agent_as_tool_adapter_end_to_end():
 
     async def consume():
         nonlocal tokens, completed
-        async for ev in orch.stream(session_id=session.id, inputs={"messages": [{"role": "user", "content": [{"type": "text", "data": "hi"}]}]}):
+        async for ev in orch.stream(
+            session_id=session.id,
+            inputs={
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "data": "hi"}]}
+                ]
+            },
+        ):
             if ev["type"] == "tool.stdout":
                 tokens.append(ev["line"])  # type: ignore[index]
             if ev["type"] == "tool.completed":
@@ -55,4 +78,3 @@ async def test_agent_as_tool_adapter_end_to_end():
     await consume()
     assert tokens
     assert completed
-

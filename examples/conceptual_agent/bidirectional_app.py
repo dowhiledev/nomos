@@ -19,9 +19,7 @@ async def sender(orch: Orchestrator, session_id: str, lines: List[str]) -> None:
         # Simulate user typing/messages over time
         await asyncio.sleep(0.1)
         payload: Dict = {
-            "messages": [
-                {"role": "user", "content": [{"type": "text", "data": line}]}
-            ]
+            "messages": [{"role": "user", "content": [{"type": "text", "data": line}]}]
         }
         await orch.input(session_id=session_id, inputs=payload)
 
@@ -33,7 +31,7 @@ async def receiver(orch: Orchestrator, session_id: str) -> None:
         elif evt["type"].startswith("tool."):
             print("\n", evt)
         elif evt["type"] == "decision.completed":
-            print("\n[turn complete]", evt["data"]) 
+            print("\n[turn complete]", evt["data"])
 
 
 async def main() -> None:
@@ -57,4 +55,3 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
-

@@ -12,10 +12,15 @@ from nomos.core import Orchestrator
 class FakeProvider:
     async def stream_decision(self, messages, schema):  # type: ignore[no-untyped-def]
         yield {"type": "io.token", "data": {"role": "assistant", "delta": "Hi"}}
-        yield {"type": "decision.completed", "data": {"action": "RESPOND", "response": "Hi"}}
+        yield {
+            "type": "decision.completed",
+            "data": {"action": "RESPOND", "response": "Hi"},
+        }
 
 
-@pytest.mark.skip(reason="SSE streaming with TestClient is flaky under pytest; server supports SSE with event ids")
+@pytest.mark.skip(
+    reason="SSE streaming with TestClient is flaky under pytest; server supports SSE with event ids"
+)
 @pytest.mark.asyncio
 async def test_sse_stream_emits_events_on_input():
     orch = Orchestrator(agent=None, provider=FakeProvider())
@@ -29,7 +34,11 @@ async def test_sse_stream_emits_events_on_input():
         time.sleep(0.05)
         client.post(
             f"/v2/sessions/{sid}/input",
-            json={"messages": [{"role": "user", "content": [{"type": "text", "data": "hello"}]}]},
+            json={
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "data": "hello"}]}
+                ]
+            },
         )
 
     t = threading.Thread(target=_send_input, daemon=True)

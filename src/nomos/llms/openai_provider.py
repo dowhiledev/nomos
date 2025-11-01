@@ -45,11 +45,15 @@ def _to_openai_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 class OpenAIProvider(LLMProviderPort):
-    def __init__(self, *, model: str = "gpt-4o-mini", client: Optional[Any] = None) -> None:  # noqa: ANN401
+    def __init__(
+        self, *, model: str = "gpt-4o-mini", client: Optional[Any] = None
+    ) -> None:  # noqa: ANN401
         self._model = model
         self._client = client
 
-    async def stream_decision(self, messages: List[Dict[str, Any]], schema: Any) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
+    async def stream_decision(
+        self, messages: List[Dict[str, Any]], schema: Any
+    ) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
         # If a test client is provided that exposes a `chat.completions.create` streaming iterator,
         # use it; otherwise attempt to create a default OpenAI client lazily.
         client = self._client
@@ -59,11 +63,15 @@ class OpenAIProvider(LLMProviderPort):
 
                 client = OpenAI()
             except Exception as exc:  # pragma: no cover - optional dependency
-                raise RuntimeError("OpenAI client not available; install 'openai' extra") from exc
+                raise RuntimeError(
+                    "OpenAI client not available; install 'openai' extra"
+                ) from exc
 
         oai_messages = _to_openai_messages(messages)
         # Start streaming chat completion
-        stream = client.chat.completions.create(model=self._model, messages=oai_messages, stream=True)
+        stream = client.chat.completions.create(
+            model=self._model, messages=oai_messages, stream=True
+        )
         # Aggregate the full text to yield a final RESPOND decision, or collect tool_call deltas
         full_text: List[str] = []
         tool_calls: Dict[int, Dict[str, Any]] = {}
@@ -85,7 +93,10 @@ class OpenAIProvider(LLMProviderPort):
                     content = delta.get("content")
             if content:
                 full_text.append(content)
-                yield {"type": EventType.TOKEN_EMITTED.value, "data": {"role": "assistant", "delta": content}}
+                yield {
+                    "type": EventType.TOKEN_EMITTED.value,
+                    "data": {"role": "assistant", "delta": content},
+                }
 
             # Handle function/tool-calling deltas
             tool_delta = None
@@ -106,7 +117,11 @@ class OpenAIProvider(LLMProviderPort):
                         name = getattr(func, "name", None) if func is not None else None
                         if name is None and isinstance(func, dict):
                             name = func.get("name")
-                        args_delta = getattr(func, "arguments", None) if func is not None else None
+                        args_delta = (
+                            getattr(func, "arguments", None)
+                            if func is not None
+                            else None
+                        )
                         if args_delta is None and isinstance(func, dict):
                             args_delta = func.get("arguments")
                     except Exception:  # pragma: no cover
@@ -114,11 +129,15 @@ class OpenAIProvider(LLMProviderPort):
                         args_delta = None
                     if idx is None:
                         idx = 0
-                    entry = tool_calls.setdefault(int(idx), {"name": name or "", "arguments": ""})
+                    entry = tool_calls.setdefault(
+                        int(idx), {"name": name or "", "arguments": ""}
+                    )
                     if name:
                         entry["name"] = name
                     if args_delta:
-                        entry["arguments"] = entry.get("arguments", "") + str(args_delta)
+                        entry["arguments"] = entry.get("arguments", "") + str(
+                            args_delta
+                        )
 
         # final decision: prefer tool_call if present, else respond text
         if tool_calls:
@@ -131,7 +150,10 @@ class OpenAIProvider(LLMProviderPort):
                 tool_kwargs = {"__raw__": raw_args}
             yield {
                 "type": EventType.DECISION_COMPLETED.value,
-                "data": {"action": "TOOL_CALL", "tool_call": {"tool_name": tool_name, "tool_kwargs": tool_kwargs}},
+                "data": {
+                    "action": "TOOL_CALL",
+                    "tool_call": {"tool_name": tool_name, "tool_kwargs": tool_kwargs},
+                },
             }
         else:
             response_text = "".join(full_text)
@@ -140,7 +162,9 @@ class OpenAIProvider(LLMProviderPort):
                 "data": {"action": "RESPOND", "response": response_text},
             }
 
-    async def stream_generate(self, messages: List[Dict[str, Any]]) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
+    async def stream_generate(
+        self, messages: List[Dict[str, Any]]
+    ) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
         # Implement in terms of stream_decision and pass through token events only
         async for frame in self.stream_decision(messages, schema=None):  # type: ignore[arg-type]
             if frame.get("type") == EventType.TOKEN_EMITTED.value:

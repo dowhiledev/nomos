@@ -21,4 +21,3 @@ class InMemoryCheckpointStore:
 
 
 __all__ = ["InMemoryCheckpointStore"]
-

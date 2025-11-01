@@ -87,7 +87,9 @@ class Orchestrator:
         await self._append(
             sid,
             [
-                SessionEvent(session_id=sid, type=EventType.SESSION_CREATED.value, data={}).model_dump(),
+                SessionEvent(
+                    session_id=sid, type=EventType.SESSION_CREATED.value, data={}
+                ).model_dump(),
             ],
         )
         inc(EventType.SESSION_CREATED.value)
@@ -98,7 +100,9 @@ class Orchestrator:
             session_id,
             [
                 SessionEvent(
-                    session_id=session_id, type=EventType.INPUT_ENQUEUED.value, data=inputs
+                    session_id=session_id,
+                    type=EventType.INPUT_ENQUEUED.value,
+                    data=inputs,
                 ).model_dump(),
             ],
         )
@@ -137,7 +141,10 @@ class Orchestrator:
                             SessionEvent(
                                 session_id=session_id,
                                 type=EventType.DECISION_COMPLETED.value,
-                                data={"action": "RESPOND", "response": "(provider not configured)"},
+                                data={
+                                    "action": "RESPOND",
+                                    "response": "(provider not configured)",
+                                },
                             ).model_dump()
                         ],
                     )
@@ -145,8 +152,13 @@ class Orchestrator:
                     continue
 
                 # Stream decision from provider; provider yields generic frames
-                with span("provider.stream_decision"), measure("provider.stream_decision"):
-                    async for frame in self._provider.stream_decision(payload.get("messages", []), schema=None):
+                with (
+                    span("provider.stream_decision"),
+                    measure("provider.stream_decision"),
+                ):
+                    async for frame in self._provider.stream_decision(
+                        payload.get("messages", []), schema=None
+                    ):
                         # Check pause between frames
                         await self._resume_events[session_id].wait()
                         # Cancel at token/tool boundaries
@@ -205,10 +217,21 @@ class Orchestrator:
                                     inc(EventType.ERROR_OCCURRED.value)
                                     break
                                 # Stream tool frames
-                                ctx = {"cancel_event": self._cancel_events[session_id], "session_id": session_id}
-                                with span(f"tool.run:{tool_name}"), measure(f"tool.run:{tool_name}"):
-                                    async for tframe in self._tool_runner.run(tool_name, tool_kwargs, ctx):
-                                        if self._cancel_flags.get(session_id) or self._cancel_events[session_id].is_set():
+                                ctx = {
+                                    "cancel_event": self._cancel_events[session_id],
+                                    "session_id": session_id,
+                                }
+                                with (
+                                    span(f"tool.run:{tool_name}"),
+                                    measure(f"tool.run:{tool_name}"),
+                                ):
+                                    async for tframe in self._tool_runner.run(
+                                        tool_name, tool_kwargs, ctx
+                                    ):
+                                        if (
+                                            self._cancel_flags.get(session_id)
+                                            or self._cancel_events[session_id].is_set()
+                                        ):
                                             self._cancel_flags[session_id] = False
                                             self._cancel_events[session_id].clear()
                                             break
@@ -216,7 +239,9 @@ class Orchestrator:
                                         inc(tframe.get("type", "tool.frame"))
                             # Handle routing (MOVE) only on decision frame
                             if isinstance(self._agent, AgentSpec) and action == "MOVE":
-                                to_id = self._agent.route(self._current_node.get(session_id) or "", data)  # type: ignore[arg-type]
+                                to_id = self._agent.route(
+                                    self._current_node.get(session_id) or "", data
+                                )  # type: ignore[arg-type]
                                 if to_id:
                                     await self._append(
                                         session_id,
@@ -225,7 +250,9 @@ class Orchestrator:
                                                 session_id=session_id,
                                                 type=EventType.ROUTING_APPLIED.value,
                                                 data={
-                                                    "from": self._current_node.get(session_id),
+                                                    "from": self._current_node.get(
+                                                        session_id
+                                                    ),
                                                     "to": to_id,
                                                     "condition": f"MOVE:{data.get('step_id')}",
                                                 },
@@ -259,7 +286,9 @@ class Orchestrator:
                 session_id,
                 [
                     SessionEvent(
-                        session_id=session_id, type=EventType.CANCEL_APPLIED.value, data={"reason": "requested"}
+                        session_id=session_id,
+                        type=EventType.CANCEL_APPLIED.value,
+                        data={"reason": "requested"},
                     ).model_dump(),
                 ],
             )
@@ -308,14 +337,18 @@ class Orchestrator:
             session_id,
             [
                 SessionEvent(
-                    session_id=session_id, type=EventType.CONTROL_APPLIED.value, data=command
+                    session_id=session_id,
+                    type=EventType.CONTROL_APPLIED.value,
+                    data=command,
                 ).model_dump(),
             ],
         )
         inc(EventType.CONTROL_APPLIED.value)
 
     async def stream(
-        self, session_id: str, inputs: Optional[Dict[str, Any]] = None  # noqa: ANN401
+        self,
+        session_id: str,
+        inputs: Optional[Dict[str, Any]] = None,  # noqa: ANN401
     ) -> AsyncIterator[Dict[str, Any]]:
         # If initial inputs provided, enqueue them first
         if inputs:
