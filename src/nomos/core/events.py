@@ -18,6 +18,7 @@ class EventType(str, Enum):
     DECISION_STARTED = "decision.started"
     TOKEN_EMITTED = "io.token"
     DECISION_COMPLETED = "decision.completed"
+    ROUTING_APPLIED = "routing.applied"
     CONTROL_APPLIED = "control.applied"
     CHECKPOINT_CREATED = "checkpoint.created"
     ERROR_OCCURRED = "error.occurred"
@@ -34,4 +35,3 @@ class SessionEvent(BaseModel):
 
 
 __all__ = ["EventType", "SessionEvent"]
-

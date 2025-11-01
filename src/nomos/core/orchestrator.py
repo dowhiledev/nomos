@@ -22,6 +22,7 @@ from .events import EventType, SessionEvent
 from .state import SessionState
 from .store.memory import InMemoryEventStore
 from .ports import LLMProviderPort, ToolRunnerPort
+from nomos.graph import AgentSpec
 
 
 @dataclass
@@ -44,10 +45,16 @@ class Orchestrator:
         self._tool_runner = tool_runner
         self._input_queues: Dict[str, asyncio.Queue[Dict[str, Any]]] = {}
         self._workers: Dict[str, asyncio.Task] = {}
+        self._current_node: Dict[str, Optional[str]] = {}
 
     async def create_session(self) -> _Session:
         sid = str(uuid.uuid4())
         self._input_queues[sid] = asyncio.Queue()
+        # initialize current node from AgentSpec if available
+        if isinstance(self._agent, AgentSpec):
+            self._current_node[sid] = self._agent.start
+        else:
+            self._current_node[sid] = None
         await self._store.append(
             sid,
             [
@@ -78,7 +85,10 @@ class Orchestrator:
                     session_id,
                     [
                         SessionEvent(
-                            session_id=session_id, type=EventType.DECISION_STARTED.value, data={}
+                            session_id=session_id,
+                            type=EventType.DECISION_STARTED.value,
+                            data={},
+                            node_id=self._current_node.get(session_id),
                         ).model_dump(),
                     ],
                 )
@@ -118,6 +128,7 @@ class Orchestrator:
                                     session_id=session_id,
                                     type=EventType.DECISION_COMPLETED.value,
                                     data=frame.get("data", {}),
+                                    node_id=self._current_node.get(session_id),
                                 ).model_dump()
                             ],
                         )
@@ -146,6 +157,25 @@ class Orchestrator:
                             # Stream tool frames
                             async for tframe in self._tool_runner.run(tool_name, tool_kwargs, {}):
                                 await self._store.append(session_id, [tframe])
+                        # Handle routing (MOVE)
+                        if isinstance(self._agent, AgentSpec) and action == "MOVE":
+                            to_id = self._agent.route(self._current_node.get(session_id) or "", data)  # type: ignore[arg-type]
+                            if to_id:
+                                await self._store.append(
+                                    session_id,
+                                    [
+                                        SessionEvent(
+                                            session_id=session_id,
+                                            type=EventType.ROUTING_APPLIED.value,
+                                            data={
+                                                "from": self._current_node.get(session_id),
+                                                "to": to_id,
+                                                "condition": f"MOVE:{data.get('step_id')}",
+                                            },
+                                        ).model_dump()
+                                    ],
+                                )
+                                self._current_node[session_id] = to_id
                         break
             except Exception as exc:  # noqa: BLE001
                 await self._store.append(
@@ -195,5 +225,10 @@ class Orchestrator:
                 state.last_action = "decision.completed"
             if ev["type"] == EventType.TOKEN_EMITTED.value:
                 state.last_action = "io.token"
+            if ev["type"] == EventType.ROUTING_APPLIED.value:
+                state.current_node = ev.get("data", {}).get("to")
+        # if never routed, use initial
+        if not state.current_node:
+            state.current_node = self._current_node.get(session_id)
         state.history_tail = tail
         return state.model_dump()
