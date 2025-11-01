@@ -22,6 +22,7 @@ class EventType(str, Enum):
     CONTROL_APPLIED = "control.applied"
     CANCEL_APPLIED = "cancel.applied"
     CHECKPOINT_CREATED = "checkpoint.created"
+    CHECKPOINT_RESTORED = "checkpoint.restored"
     ERROR_OCCURRED = "error.occurred"
 
 

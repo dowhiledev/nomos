@@ -240,6 +240,23 @@ class Orchestrator:
                 ],
             )
             return
+        elif ctype == "checkpoint.restore":
+            cid = command.get("id")
+            if not cid:
+                raise ValueError("checkpoint.restore requires 'id'")
+            cp = await self._checkpoint_store.load(session_id, cid)
+            self._current_node[session_id] = cp.get("node_id")
+            await self._store.append(
+                session_id,
+                [
+                    SessionEvent(
+                        session_id=session_id,
+                        type=EventType.CHECKPOINT_RESTORED.value,
+                        data={"id": cid, "node_id": cp.get("node_id")},
+                    ).model_dump(),
+                ],
+            )
+            return
         # default: record control applied
         await self._store.append(
             session_id,

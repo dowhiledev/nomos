@@ -45,3 +45,19 @@ class AgentSpec(BaseModel):
                 return e.to_id
         return None
 
+    def validate_spec(self) -> None:
+        node_ids = {n.id for n in self.nodes}
+        if self.start not in node_ids:
+            raise ValueError(f"start node '{self.start}' not found in nodes")
+        for e in self.edges:
+            if e.from_id not in node_ids:
+                raise ValueError(f"edge.from_id '{e.from_id}' not found in nodes")
+            if e.to_id not in node_ids:
+                raise ValueError(f"edge.to_id '{e.to_id}' not found in nodes")
+
+
+def compile_agent(spec: AgentSpec) -> AgentSpec:
+    """Validate and return the spec (placeholder for future transforms)."""
+    spec.validate_spec()
+    return spec
+
