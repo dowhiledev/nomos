@@ -21,6 +21,7 @@ from typing import Any, AsyncIterator, Dict, Optional
 from .events import EventType, SessionEvent
 from .state import SessionState
 from .store.memory import InMemoryEventStore
+from .ports import LLMProviderPort
 
 
 @dataclass
@@ -29,10 +30,18 @@ class _Session:
 
 
 class Orchestrator:
-    def __init__(self, agent: Any, *, store: Optional[InMemoryEventStore] = None) -> None:  # noqa: ANN401
+    def __init__(
+        self,
+        agent: Any,  # noqa: ANN401
+        *,
+        store: Optional[InMemoryEventStore] = None,
+        provider: Optional[LLMProviderPort] = None,
+    ) -> None:
         self._agent = agent
         self._store = store or InMemoryEventStore()
+        self._provider = provider
         self._input_queues: Dict[str, asyncio.Queue[Dict[str, Any]]] = {}
+        self._workers: Dict[str, asyncio.Task] = {}
 
     async def create_session(self) -> _Session:
         sid = str(uuid.uuid4())
@@ -56,6 +65,73 @@ class Orchestrator:
         )
         await self._input_queues[session_id].put(inputs)
 
+    async def _worker(self, session_id: str) -> None:
+        """Process queued inputs for a session using the provider (if available)."""
+        q = self._input_queues[session_id]
+        while True:
+            payload = await q.get()
+            try:
+                # Start decision
+                await self._store.append(
+                    session_id,
+                    [
+                        SessionEvent(
+                            session_id=session_id, type=EventType.DECISION_STARTED.value, data={}
+                        ).model_dump(),
+                    ],
+                )
+                if not self._provider:
+                    # No provider wired: emit a trivial completion
+                    await self._store.append(
+                        session_id,
+                        [
+                            SessionEvent(
+                                session_id=session_id,
+                                type=EventType.DECISION_COMPLETED.value,
+                                data={"action": "RESPOND", "response": "(provider not configured)"},
+                            ).model_dump()
+                        ],
+                    )
+                    continue
+
+                # Stream decision from provider; provider yields generic frames
+                async for frame in self._provider.stream_decision(payload.get("messages", []), schema=None):
+                    ftype = frame.get("type")
+                    if ftype == EventType.TOKEN_EMITTED.value:
+                        await self._store.append(
+                            session_id,
+                            [
+                                SessionEvent(
+                                    session_id=session_id,
+                                    type=EventType.TOKEN_EMITTED.value,
+                                    data=frame.get("data", {}),
+                                ).model_dump()
+                            ],
+                        )
+                    elif ftype == EventType.DECISION_COMPLETED.value:
+                        await self._store.append(
+                            session_id,
+                            [
+                                SessionEvent(
+                                    session_id=session_id,
+                                    type=EventType.DECISION_COMPLETED.value,
+                                    data=frame.get("data", {}),
+                                ).model_dump()
+                            ],
+                        )
+                        break
+            except Exception as exc:  # noqa: BLE001
+                await self._store.append(
+                    session_id,
+                    [
+                        SessionEvent(
+                            session_id=session_id,
+                            type=EventType.ERROR_OCCURRED.value,
+                            data={"message": str(exc)},
+                        ).model_dump()
+                    ],
+                )
+
     async def control(self, session_id: str, command: Dict[str, Any]) -> None:  # noqa: ANN401
         await self._store.append(
             session_id,
@@ -72,6 +148,10 @@ class Orchestrator:
         # If initial inputs provided, enqueue them first
         if inputs:
             await self.input(session_id, inputs)
+
+        # Ensure a worker is running for this session to process queued inputs
+        if session_id not in self._workers:
+            self._workers[session_id] = asyncio.create_task(self._worker(session_id))
 
         # For now, just forward events appended to the store (including inputs/controls)
         async for ev in self._store.subscribe(session_id):
@@ -90,4 +170,3 @@ class Orchestrator:
                 state.last_action = "io.token"
         state.history_tail = tail
         return state.model_dump()
-
