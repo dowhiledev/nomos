@@ -21,6 +21,7 @@ from typing import Any, AsyncIterator, Dict, Optional
 from .events import EventType, SessionEvent
 from .state import SessionState
 from .store.memory import InMemoryEventStore
+from .store.checkpoint_memory import InMemoryCheckpointStore
 from .ports import LLMProviderPort, ToolRunnerPort
 from nomos.graph import AgentSpec
 
@@ -38,18 +39,25 @@ class Orchestrator:
         store: Optional[InMemoryEventStore] = None,
         provider: Optional[LLMProviderPort] = None,
         tool_runner: Optional[ToolRunnerPort] = None,
+        checkpoint_store: Optional[InMemoryCheckpointStore] = None,
     ) -> None:
         self._agent = agent
         self._store = store or InMemoryEventStore()
         self._provider = provider
         self._tool_runner = tool_runner
+        self._checkpoint_store = checkpoint_store or InMemoryCheckpointStore()
         self._input_queues: Dict[str, asyncio.Queue[Dict[str, Any]]] = {}
         self._workers: Dict[str, asyncio.Task] = {}
         self._current_node: Dict[str, Optional[str]] = {}
+        self._cancel_flags: Dict[str, bool] = {}
+        self._resume_events: Dict[str, asyncio.Event] = {}
 
     async def create_session(self) -> _Session:
         sid = str(uuid.uuid4())
         self._input_queues[sid] = asyncio.Queue()
+        self._cancel_flags[sid] = False
+        self._resume_events[sid] = asyncio.Event()
+        self._resume_events[sid].set()
         # initialize current node from AgentSpec if available
         if isinstance(self._agent, AgentSpec):
             self._current_node[sid] = self._agent.start
@@ -80,6 +88,8 @@ class Orchestrator:
         while True:
             payload = await q.get()
             try:
+                # Honor pause
+                await self._resume_events[session_id].wait()
                 # Start decision
                 await self._store.append(
                     session_id,
@@ -108,6 +118,12 @@ class Orchestrator:
 
                 # Stream decision from provider; provider yields generic frames
                 async for frame in self._provider.stream_decision(payload.get("messages", []), schema=None):
+                    # Check pause between frames
+                    await self._resume_events[session_id].wait()
+                    # Cancel at token/tool boundaries
+                    if self._cancel_flags.get(session_id):
+                        self._cancel_flags[session_id] = False
+                        break
                     ftype = frame.get("type")
                     if ftype == EventType.TOKEN_EMITTED.value:
                         await self._store.append(
@@ -156,6 +172,9 @@ class Orchestrator:
                                 break
                             # Stream tool frames
                             async for tframe in self._tool_runner.run(tool_name, tool_kwargs, {}):
+                                if self._cancel_flags.get(session_id):
+                                    self._cancel_flags[session_id] = False
+                                    break
                                 await self._store.append(session_id, [tframe])
                         # Handle routing (MOVE)
                         if isinstance(self._agent, AgentSpec) and action == "MOVE":
@@ -190,6 +209,38 @@ class Orchestrator:
                 )
 
     async def control(self, session_id: str, command: Dict[str, Any]) -> None:  # noqa: ANN401
+        ctype = command.get("type")
+        if ctype == "cancel.requested":
+            self._cancel_flags[session_id] = True
+            await self._store.append(
+                session_id,
+                [
+                    SessionEvent(
+                        session_id=session_id, type=EventType.CANCEL_APPLIED.value, data={"reason": "requested"}
+                    ).model_dump(),
+                ],
+            )
+            return
+        if ctype == "pause.requested":
+            self._resume_events[session_id].clear()
+        elif ctype == "resume.requested":
+            self._resume_events[session_id].set()
+        elif ctype == "checkpoint.requested":
+            cid = command.get("id") or str(uuid.uuid4())
+            cp = {"id": cid, "node_id": self._current_node.get(session_id)}
+            await self._checkpoint_store.save(session_id, cp)
+            await self._store.append(
+                session_id,
+                [
+                    SessionEvent(
+                        session_id=session_id,
+                        type=EventType.CHECKPOINT_CREATED.value,
+                        data={"id": cid, "node_id": cp["node_id"]},
+                    ).model_dump(),
+                ],
+            )
+            return
+        # default: record control applied
         await self._store.append(
             session_id,
             [

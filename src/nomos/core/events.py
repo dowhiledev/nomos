@@ -20,6 +20,7 @@ class EventType(str, Enum):
     DECISION_COMPLETED = "decision.completed"
     ROUTING_APPLIED = "routing.applied"
     CONTROL_APPLIED = "control.applied"
+    CANCEL_APPLIED = "cancel.applied"
     CHECKPOINT_CREATED = "checkpoint.created"
     ERROR_OCCURRED = "error.occurred"
 
