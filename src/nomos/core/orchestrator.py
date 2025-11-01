@@ -24,7 +24,7 @@ from .store.memory import InMemoryEventStore
 from .store.checkpoint_memory import InMemoryCheckpointStore
 from .ports import LLMProviderPort, ToolRunnerPort
 from nomos.graph import AgentSpec
-from .observe import inc, span
+from .observe import inc, span, measure
 
 
 @dataclass
@@ -51,12 +51,14 @@ class Orchestrator:
         self._workers: Dict[str, asyncio.Task] = {}
         self._current_node: Dict[str, Optional[str]] = {}
         self._cancel_flags: Dict[str, bool] = {}
+        self._cancel_events: Dict[str, asyncio.Event] = {}
         self._resume_events: Dict[str, asyncio.Event] = {}
 
     async def create_session(self) -> _Session:
         sid = str(uuid.uuid4())
         self._input_queues[sid] = asyncio.Queue()
         self._cancel_flags[sid] = False
+        self._cancel_events[sid] = asyncio.Event()
         self._resume_events[sid] = asyncio.Event()
         self._resume_events[sid].set()
         # initialize current node from AgentSpec if available
@@ -125,7 +127,7 @@ class Orchestrator:
                     continue
 
                 # Stream decision from provider; provider yields generic frames
-                with span("provider.stream_decision"):
+                with span("provider.stream_decision"), measure("provider.stream_decision"):
                     async for frame in self._provider.stream_decision(payload.get("messages", []), schema=None):
                         # Check pause between frames
                         await self._resume_events[session_id].wait()
@@ -185,10 +187,12 @@ class Orchestrator:
                                     inc(EventType.ERROR_OCCURRED.value)
                                     break
                                 # Stream tool frames
-                                with span(f"tool.run:{tool_name}"):
-                                    async for tframe in self._tool_runner.run(tool_name, tool_kwargs, {}):
-                                        if self._cancel_flags.get(session_id):
+                                ctx = {"cancel_event": self._cancel_events[session_id], "session_id": session_id}
+                                with span(f"tool.run:{tool_name}"), measure(f"tool.run:{tool_name}"):
+                                    async for tframe in self._tool_runner.run(tool_name, tool_kwargs, ctx):
+                                        if self._cancel_flags.get(session_id) or self._cancel_events[session_id].is_set():
                                             self._cancel_flags[session_id] = False
+                                            self._cancel_events[session_id].clear()
                                             break
                                         await self._store.append(session_id, [tframe])
                                         inc(tframe.get("type", "tool.frame"))
@@ -230,6 +234,9 @@ class Orchestrator:
         ctype = command.get("type")
         if ctype == "cancel.requested":
             self._cancel_flags[session_id] = True
+            # propagate to tools via cancel event (if in-flight)
+            if session_id in self._cancel_events:
+                self._cancel_events[session_id].set()
             await self._store.append(
                 session_id,
                 [

@@ -35,7 +35,17 @@ class SimpleToolRunner(ToolRunnerPort):
             return
 
         async def _execute() -> AsyncIterator[Dict[str, Any]]:
-            res = fn(**args)
+            call_kwargs = dict(args)
+            # Pass ctx if the tool supports it (parameter name 'ctx' or **kwargs available)
+            try:
+                sig = inspect.signature(fn)
+                params = sig.parameters
+                if "ctx" in params or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()):
+                    call_kwargs["ctx"] = ctx
+            except Exception:
+                # best-effort; fall back to not passing ctx
+                pass
+            res = fn(**call_kwargs)
             if inspect.isasyncgen(res):
                 async for frame in res:  # type: ignore[async-for-over-async-iterable]
                     yield frame
@@ -68,4 +78,3 @@ async def _iterate_with_timeout(agen: AsyncIterator[Dict[str, Any]], timeout: fl
 
 
 __all__ = ["SimpleToolRunner"]
-

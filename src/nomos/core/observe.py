@@ -1,12 +1,14 @@
-"""Lightweight observability: counters + optional OTEL spans."""
+"""Lightweight observability: counters, timers, and optional OTEL spans."""
 
 from __future__ import annotations
 
 import os
+import time
 from contextlib import contextmanager
-from typing import Dict
+from typing import Dict, List
 
 EVENT_COUNTERS: Dict[str, int] = {}
+LATENCY_HIST: Dict[str, List[float]] = {}
 
 
 def inc(event_type: str) -> None:
@@ -15,6 +17,7 @@ def inc(event_type: str) -> None:
 
 def reset_counters() -> None:
     EVENT_COUNTERS.clear()
+    LATENCY_HIST.clear()
 
 
 def _otel_enabled() -> bool:
@@ -37,5 +40,17 @@ def span(name: str):  # noqa: ANN001
         yield
 
 
-__all__ = ["EVENT_COUNTERS", "inc", "reset_counters", "span"]
+def record_latency(name: str, seconds: float) -> None:
+    LATENCY_HIST.setdefault(name, []).append(seconds)
 
+
+@contextmanager
+def measure(name: str):  # noqa: ANN001
+    start = time.perf_counter()
+    try:
+        yield
+    finally:
+        record_latency(name, time.perf_counter() - start)
+
+
+__all__ = ["EVENT_COUNTERS", "LATENCY_HIST", "inc", "reset_counters", "span", "measure", "record_latency"]

@@ -59,7 +59,7 @@ Spike 4 — Tool Runner 2.0 (Async, Progress, Cancellation)
  - Deliverables:
   - `nomos-tools` runner; progress events (`tool.started|progress|stdout|completed|error`)
   - Budget/timeout enforcement; structured errors; unit tests
- - Status: In progress (SimpleToolRunner implemented over registry; orchestrator integration and tests in place)
+ - Status: In progress (SimpleToolRunner passes ctx to tools; orchestrator propagates cancel via session-level cancel_event; mid-tool cancellation test added; timeouts supported per runner)
 
 Spike 5 — Graph Runtime MVP (Nodes Only)
 - Goals: Compose nodes and edges; compile() → Agent; execute via orchestrator.
@@ -111,7 +111,7 @@ Spike 11 — Observability (Tracing, Metrics, Timeline)
 - Scope: Span/link strategy; exporters; sampling; correlation IDs.
  - Deliverables:
   - `nomos-observe` setup helpers; default spans around LLM/tool/orchestrator; metrics counters/histograms
- - Status: Pending
+ - Status: In progress (lightweight counters + timing metrics via measure(); spans around provider/tool/orchestrator boundaries; SSE emits event ids for timeline resume)
 
 Spike 12 — Performance + Scaling
 - Goals: Concurrency tuning; worker pools; backpressure and rate limits.

@@ -146,14 +146,14 @@ Library-First API (primary usage)
 4) Tooling 2.0
 - ToolDefinition: schema, permissions, budgets, timeouts, isolation (subprocess/threadpool, optional sandbox).
 - Execution API:
-  - run(args, ctx) -> async iterator emitting tool.progress/tool.stdout events; supports cancellation tokens.
+  - run(args, ctx) -> async iterator emitting tool.progress/tool.stdout events; supports cancellation tokens via ctx["cancel_event"].
   - Return structured results; optionally stream partial result frames.
 - MCP-native: server registry, discovery, health check; tools pulled at runtime; streaming over MCP where possible.
 - Concurrency: multiple tool calls in parallel; scheduler enforces session/tenant budgets.
 
 5) Interrupts & Barge-in
 - Interaction Controller merges inbound commands (user input, cancel, pause, resume) into session priority queues.
-- Cooperative cancellation: LLM streams and tool runners observe cancellation tokens; Orchestrator sends cancel.
+- Cooperative cancellation: LLM streams and tool runners observe cancellation tokens; Orchestrator sets a session-level cancel_event that tools receive via ctx.
 - Policies: immediate abort, graceful stop-at-boundary, or preempt + resume via checkpoint.
 - Voice UX: barge-in interrupts TTS mid-playback; system resumes listening and adapts next state.
 
@@ -170,7 +170,7 @@ Library-First API (primary usage)
 
 8) Observability & Telemetry
 - OpenTelemetry baked-in at node/event granularity. Every token/tool progress is trace-linked.
-- Metrics: per-session latency, tokens/sec, error rates, tool durations, interrupt reactions.
+- Metrics: per-session latency, tokens/sec, error rates, tool durations, interrupt reactions. Lightweight defaults provided (counters + timing histograms), OTEL optional.
 - Logs: structured JSON; optional sampling; correlation IDs for session, node, tool.
 - Timeline explorer API: query events by session/node/time; replay timeline in UI.
 
