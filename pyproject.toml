@@ -24,6 +24,10 @@ dev = [
 openai = [
     "openai>=1.40.0",
 ]
+server = [
+    "fastapi>=0.110",
+    "uvicorn>=0.23",
+]
 
 [build-system]
 requires = ["hatchling"]
