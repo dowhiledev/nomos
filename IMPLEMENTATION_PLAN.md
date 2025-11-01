@@ -78,13 +78,11 @@ Spike 6 — Checkpointing + Replay
   - Replay utility for timeline → state
  - Status: In progress (in-memory checkpoint store + checkpoint.created control)
 
-Spike 7 — SSE/WS Server + TS SDK v2 (duplex)
+Spike 7 — SSE/WS Server (duplex)
 - Goals: Optional transport to consume events and control sessions remotely.
-- Scope: HTTP: create/input/control/state; SSE events; WS bi-directional sessions (send inputs + receive events);
-  TS SDK client with types and duplex helpers.
+ - Scope: HTTP: create/input/control/state; SSE events; WS bi-directional sessions (send inputs + receive events).
  - Deliverables:
   - `nomos-server` with `/v2` endpoints
-  - `nomos-sdk-ts` streaming client; examples
  - Status: Pending
 
 Spike 8 — Interrupt Controller + Prioritization
@@ -148,8 +146,8 @@ Milestone Grouping & Exit Criteria
   - Exit: At least one fake provider/tool passes contract tests; in‑memory event store usable.
 - M2 Runtime MVP (3,4,5): Provider + Tool runner + Graph compile integrated with actor orchestrator.
   - Exit: Conceptual example runs locally with streaming and a simple tool call.
-- M3 Transport & SDK (6,7): Server endpoints + TS SDK (duplex) operational.
-  - Exit: Curl/SDK can create session, stream SSE/WS, send inputs and control; e2e demo.
+- M3 Transport (6,7): Server endpoints operational (duplex).
+  - Exit: curl/web client can create session, stream SSE/WS, send inputs and control; e2e demo.
 - M4 Multimodal & Interrupts (8,9): Content‑parts and robust interrupt controller.
   - Exit: Image prompt works; mid‑token and mid‑tool cancel tested.
 - M5 Specialization & Observability (10,11): Subgraphs + agent‑as‑tool; tracing/metrics.

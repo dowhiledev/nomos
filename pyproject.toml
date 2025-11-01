@@ -21,6 +21,9 @@ dev = [
     "ruff>=0.6",
     "mypy>=1.10",
 ]
+openai = [
+    "openai>=1.40.0",
+]
 
 [build-system]
 requires = ["hatchling"]
