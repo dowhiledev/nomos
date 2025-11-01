@@ -110,7 +110,9 @@ class Orchestrator:
         inc(EventType.SESSION_CREATED.value)
         return _Session(id=sid)
 
-    async def input(self, session_id: str, inputs: SessionInput) -> None:
+    async def input(self, session_id: str, inputs: Union[SessionInput, Dict[str, Any]]) -> None:
+        if isinstance(inputs, dict):
+            inputs = SessionInput.model_validate(inputs)
         await self._append(
             session_id,
             [
@@ -365,7 +367,14 @@ class Orchestrator:
                                             self._cancel_flags[session_id] = False
                                             self._cancel_events[session_id].clear()
                                             break
-                                        await self._append(session_id, [tframe])
+                                        # Convert tool frame to SessionEvent
+                                        session_event = SessionEvent(
+                                            session_id=session_id,
+                                            type=tframe["type"],
+                                            data={k: v for k, v in tframe.items() if k != "type"},
+                                            node_id=current_node_id,
+                                        )
+                                        await self._append(session_id, [session_event])
                                         inc(tframe.get("type", "tool.frame"))
                                         if tframe.get("type") == "tool.completed":
                                             last_result = tframe.get("result")
@@ -409,6 +418,7 @@ class Orchestrator:
                                     )
                                     inc(EventType.ROUTING_APPLIED.value)
                                     self._current_node[session_id] = to_id
+                            # End after one decision turn per input
                         # End after one decision turn per input (multi-turn handled by client or future loop)
                         break
             except Exception as exc:  # noqa: BLE001
@@ -424,7 +434,9 @@ class Orchestrator:
                 )
                 inc(EventType.ERROR_OCCURRED.value)
 
-    async def control(self, session_id: str, command: ControlCommand) -> None:
+    async def control(self, session_id: str, command: Union[ControlCommand, Dict[str, Any]]) -> None:
+        if isinstance(command, dict):
+            command = ControlCommand.model_validate(command)
         ctype = command.type
         if ctype == "cancel.requested":
             self._cancel_flags[session_id] = True

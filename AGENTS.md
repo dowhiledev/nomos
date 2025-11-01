@@ -6,7 +6,7 @@ Purpose
 Non‑Negotiables
 - No migration constraints: prioritize the best design. Adapters can come later if needed.
 - Nodes‑only graphs: nodes are LLM decision steps; tools are invoked inside nodes (ReACT‑style). Tools are not nodes.
-- Edges encode routing with conditions; cycles allowed. Subgraphs compile to Agents; agent‑as‑tool supported.
+- Edges encode routing with conditions; cycles allowed. Subgraphs compile to Agents.
 - Core owns event routing/observability: users may consume streams but never reimplement routing.
 - Event‑sourced runtime: append‑only events, materialized state, node‑level checkpoints, deterministic replay.
 - Async + streaming everywhere: tokens, tool progress, step transitions. Interruptible with pause/resume/cancel.
@@ -16,7 +16,7 @@ Module Boundaries (target layout)
 - `nomos.core`: event model, orchestrator, checkpointer, state projection, interrupt controller.
 - `nomos.graph`: graph builder (nodes/edges), compile→Agent, subgraph composition; HITL is node behavior, not a node type.
 - `nomos.llms-*`: providers with streaming + tool/function‑calling.
-- `nomos.tools`: async tool runner, budgets/timeouts/cancellation, isolation options; agent‑as‑tool adapter.
+- `nomos.tools`: async tool runner, budgets/timeouts/cancellation, isolation options.
 - `nomos.server`: SSE/WS (and optional gRPC) endpoints + auth/limits; thin over core.
 - `nomos.observe`: OTEL tracing, metrics, timeline helpers.
 - `examples/`: user‑facing code only; no placeholders.

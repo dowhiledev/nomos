@@ -28,6 +28,3 @@ Aggregates (Tools)
 
 Aggregates (Observe/Security)
 - PolicySet (optional later): rate limits, ACLs.
-
-Notes
-- Agent‑as‑Tool wraps an AgentSpec/Agent instance behind the Tool port; it is not a separate aggregate.

@@ -5,7 +5,6 @@
 - Node (Step): A decision point driven by an LLM that may call tools (ReACT‑style) and emit a Decision.
 - Edge (Route): Declares an allowed transition with a natural-language condition (for prompting). The Decision selects the next node (`MOVE` + `step_id`); runtime validates the chosen target.
 - Tool: An async capability invoked by a Node (not a Node itself). Emits progress/stdout/completed/error events.
-- Agent‑as‑Tool: Treating an Agent as a Tool for specialization or delegation.
 - Decision: Structured output from a Node indicating action (RESPOND/MOVE/TOOL_CALL/END) and related data.
 - Session: A running conversational context for one Agent; owns event log, policies, and budgets.
 - Event (SessionEvent): Canonical, append‑only record of something that happened in a Session.

@@ -6,7 +6,7 @@ Contexts
 - Graph (nomos-graph)
   - Graph builder (Nodes/Edges), compile→Agent, validation, subgraph composition.
 - Tools (nomos-tools)
-  - Tool definitions & runner, budgets/timeouts/cancellation, agent-as-tool adapter.
+  - Tool definitions & runner, budgets/timeouts/cancellation.
 - LLM Providers (nomos-llms-*)
   - Provider shims (OpenAI/Groq/…), streaming decisions, function/tool-calling.
 - Server (nomos-server)

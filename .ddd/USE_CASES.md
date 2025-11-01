@@ -24,12 +24,6 @@ UC4 — Interrupt/Barge‑in Mid‑Token
 - Trigger: ApplyControl(cancel) while TokenEmitted is ongoing
 - Flow: CancelApplied(scope=decision) → Decision stops → CheckpointCreated
 
-UC5 — Subgraph/Agent‑as‑Tool Delegation
-- Flow:
-  1) DecisionCompleted(TOOL_CALL agent‑tool)
-  2) ToolStarted/Progress/Completed (nested agent emits its own events internally)
-  3) Parent resumes DecisionStarted → Respond/Move
-
 UC6 — Bidirectional Session (Duplex)
 - Flow:
   1) Receiver consumes stream; Sender enqueues SubmitInput concurrently

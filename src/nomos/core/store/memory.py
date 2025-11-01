@@ -20,6 +20,12 @@ class InMemoryEventStore:
 
     async def append(self, session_id: str, events: List[SessionEvent]) -> None:
         # assign event ids if not present to support SSE resume
+        if session_id not in self._seqs:
+            self._seqs[session_id] = 0
+        if session_id not in self._events:
+            self._events[session_id] = []
+        if session_id not in self._queues:
+            self._queues[session_id] = asyncio.Queue()
         for ev in events:
             if not ev.event_id:
                 self._seqs[session_id] += 1

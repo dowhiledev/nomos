@@ -6,7 +6,6 @@ Auth & Transport
 
 Tool Permissions
 - Default‑deny with allowlists per agent/node. Per‑tool budgets, timeouts, and scopes.
-- Agent‑as‑Tool inherits caller’s policy with optional overrides.
 
 Event/Log Redaction
 - Redact PII/secrets fields in events/logs. Provide allowlists for safe keys.

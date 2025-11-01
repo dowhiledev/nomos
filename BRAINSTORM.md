@@ -69,11 +69,9 @@ Package/Module Layout (proposed)
 - `nomos-core`: event model, orchestrator, checkpointer, state projection.
 - `nomos-graph`: graph runtime, node contract (Step/LLM), edges/conditions, subgraph composition; HITL as node behavior.
 - `nomos-llms-*`: provider shims (openai, groq, anthropic, google, ollama) with streaming + function calling.
-- `nomos-tools`: tool runner, isolation/sandbox, MCP client integration; agent-as-tool adapter.
+- `nomos-tools`: tool runner, isolation/sandbox, MCP client integration.
 - `nomos-server`: HTTP/SSE + WebSocket endpoints; optional gRPC; auth hooks; rate-limits.
 - `nomos-observe`: OTEL setup, metrics exporters, timeline explorer helpers.
-- `nomos-sdk-ts`: TS client for event streams + control plane (types from OpenAPI + event schemas).
-
 
 Proposed Architecture
 1) Runtime Layers
@@ -90,7 +88,7 @@ Proposed Architecture
   - Typed DAG with event-sourcing; nodes are decision steps (LLM-driven) that can call tools internally (ReACT-style).
   - Tools are not nodes. Edges carry natural-language conditions for prompting (documentation), not executable rules.
   - The node’s Decision chooses a next step via `MOVE` + `step_id`; runtime validates the target against allowed edges.
-  - Subgraphs compile to Agents and can be referenced as tools (agent-as-tool) for specialization.
+  - Subgraphs compile to Agents.
   - Graph execution is async; node work can run concurrently where applicable; each node emits NodeEvents.
   - Checkpointer plugin persists node-level checkpoints and composes session-level checkpoint metadata.
 
@@ -101,7 +99,7 @@ Proposed Architecture
 
 - Capability Adapters
   - LLMs: async streaming providers with unified token/event interface, including tool/function-calling and image/audio support.
-  - Tools: wrappers for Python callables, MCP servers, REST/RPC APIs; async execution with cancellation and progress updates; agent-as-tool.
+  - Tools: wrappers for Python callables, MCP servers, REST/RPC APIs; async execution with cancellation and progress updates.
   - Memory: vector store adapters (pgvector, Weaviate, qdrant), BM25, hybrid (as components, not nodes).
   - Media: STT/TTS adapters (Whisper, Deepgram, Realtime APIs), image pre/post-processing.
 
@@ -167,7 +165,6 @@ Library-First API (primary usage)
 - Topologies: Supervisor-Worker, Debate, Specialist Panels, DAG pipelines, hierarchical planners.
 - Shared channel bus per team: agents communicate via typed events with routing keys and ACLs.
 - Subgraph spawning: ephemeral sub-agents for specialized tasks; resource quotas; lifecycle events.
- - Agent-as-tool adapter: construct a tool from an Agent and provider; nested agent tokens stream as tool.stdout; returns tool.completed with decision.
 - Coordination nodes: RouterNode with learned or rule-based policies; Vote/Merge nodes with reducers.
 
 8) Observability & Telemetry
@@ -292,7 +289,7 @@ Quick Wins While Building vNext
 Deliverables Checklist
 - Event schema + stores (in-memory, Redis, Postgres)
 - Async LLM streaming for 1–2 providers (OpenAI, Groq)
-- Async ToolRunner with cancel/timeouts and progress; agent-as-tool adapter
+- Async ToolRunner with cancel/timeouts and progress
 - SSE/WS server endpoints + TS SDK v2
 - NomosGraph MVP (decision nodes only; edges routing; subgraphs) + Checkpointing
 - Interrupt controller + control APIs

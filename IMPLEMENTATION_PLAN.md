@@ -6,7 +6,7 @@ Overview
 
 Core Principles
 - Nodes-only graph: nodes are LLM decision steps; tools are invoked inside nodes (ReACT-style).
-- Edges encode routing with conditions; cycles supported. Subgraphs compile to Agents; agent-as-tool allowed.
+- Edges encode routing with conditions; cycles supported. Subgraphs compile to Agents.
 - Event-sourced core with async streaming, interrupts, cancellation, and deterministic replay/checkpoints.
 - Library-first usage; server (SSE/WS/gRPC) is optional transport. Core owns event routing/observability.
 
@@ -116,7 +116,7 @@ Spike 10 — Subgraphs + Agent-as-Tool
 - Scope: as_tool adapter; subgraph lifecycle; resource quotas.
  - Deliverables:
   - Agent-as-tool wrapper + tests; subgraph example aligned with conceptual sample
- - Status: In progress (agent-as-tool adapter provided in `nomos.tools.agent_adapter.as_tool`; end-to-end test with nested tool invocation added)
+ - Status: Removed from vNext scope (implementation and tests removed)
 
 Spike 11 — Observability (Tracing, Metrics, Timeline)
 - Goals: OTEL spans at node/event granularity; metrics; timeline explorer hooks.
@@ -164,7 +164,7 @@ Milestone Grouping & Exit Criteria
   - Status: In progress
 - M4 Multimodal & Interrupts (8,9): Content‑parts and robust interrupt controller.
   - Exit: Image prompt works; mid‑token and mid‑tool cancel tested.
-- M5 Specialization & Observability (10,11): Subgraphs + agent‑as‑tool; tracing/metrics.
+- M5 Specialization & Observability (10,11): Subgraphs; tracing/metrics.
   - Exit: Specialist sub‑agent example; spans and metrics visible.
 - M6 Scale & Security (12,13): Performance + limits + auth/permissions/redaction.
   - Exit: Basic load benchmark meets SLO; auth and tool ACLs enforced.
