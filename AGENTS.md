@@ -71,3 +71,4 @@ Things To Always Remember
 - The server is optional; library‑first usage is primary.
 - Event routing/observability belongs to core; user code should not replicate it.
 - No migration constraints: optimize for clarity and correctness.
+- Edges carry natural-language conditions for the model/user prompt; runtime does not parse conditions — it validates `Decision.MOVE.step_id` against allowed targets from the current node.

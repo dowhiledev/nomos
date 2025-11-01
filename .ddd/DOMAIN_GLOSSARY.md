@@ -3,7 +3,7 @@
 - Agent: A compiled, runnable graph that makes decisions and can call tools.
 - Graph: A definition composed of Nodes and Edges; compiles to an Agent.
 - Node (Step): A decision point driven by an LLM that may call tools (ReACT‑style) and emit a Decision.
-- Edge (Route): A conditional transition from one Node to another based on a Decision.
+- Edge (Route): Declares an allowed transition with a natural-language condition (for prompting). The Decision selects the next node (`MOVE` + `step_id`); runtime validates the chosen target.
 - Tool: An async capability invoked by a Node (not a Node itself). Emits progress/stdout/completed/error events.
 - Agent‑as‑Tool: Treating an Agent as a Tool for specialization or delegation.
 - Decision: Structured output from a Node indicating action (RESPOND/MOVE/TOOL_CALL/END) and related data.

@@ -9,8 +9,8 @@ def test_duplicate_edges_raise():
         start="a",
         nodes=[NodeSpec(id="a"), NodeSpec(id="b")],
         edges=[
-            EdgeSpec(from_id="a", to_id="b", when="MOVE:b"),
-            EdgeSpec(from_id="a", to_id="b", when="MOVE:b"),
+            EdgeSpec(from_id="a", to_id="b", condition="go to b"),
+            EdgeSpec(from_id="a", to_id="b", condition="go to b"),
         ],
     )
     with pytest.raises(ValueError):
@@ -22,8 +22,7 @@ def test_unreachable_nodes_raise():
         name="demo",
         start="a",
         nodes=[NodeSpec(id="a"), NodeSpec(id="b"), NodeSpec(id="c")],
-        edges=[EdgeSpec(from_id="a", to_id="b", when="MOVE:b")],
+        edges=[EdgeSpec(from_id="a", to_id="b", condition="go to b")],
     )
     with pytest.raises(ValueError):
         compile_agent(spec)
-

@@ -9,7 +9,7 @@ def test_valid_agent_compiles():
         name="demo",
         start="a",
         nodes=[NodeSpec(id="a"), NodeSpec(id="b")],
-        edges=[EdgeSpec(from_id="a", to_id="b", when="MOVE:b")],
+        edges=[EdgeSpec(from_id="a", to_id="b", condition="go to b")],
     )
     out = compile_agent(spec)
     assert out.start == "a"
@@ -26,8 +26,7 @@ def test_invalid_edge_nodes_raise():
         name="demo",
         start="a",
         nodes=[NodeSpec(id="a")],
-        edges=[EdgeSpec(from_id="a", to_id="b", when="MOVE:b")],
+        edges=[EdgeSpec(from_id="a", to_id="b", condition="go to b")],
     )
     with pytest.raises(ValueError):
         compile_agent(spec)
-

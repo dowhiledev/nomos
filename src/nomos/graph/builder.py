@@ -30,8 +30,8 @@ class GraphBuilder(BaseModel):
         self._nodes.append(NodeSpec(id=id, prompt=prompt))
         return self
 
-    def edge(self, from_id: str, to_id: str, *, when: Optional[str] = None) -> "GraphBuilder":
-        self._edges.append(EdgeSpec(from_id=from_id, to_id=to_id, when=when))
+    def edge(self, from_id: str, to_id: str, *, condition: Optional[str] = None) -> "GraphBuilder":
+        self._edges.append(EdgeSpec(from_id=from_id, to_id=to_id, condition=condition))
         return self
 
     def compile(self) -> AgentSpec:
@@ -40,4 +40,3 @@ class GraphBuilder(BaseModel):
 
 
 __all__ = ["GraphBuilder"]
-

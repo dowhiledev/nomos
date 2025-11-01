@@ -18,34 +18,7 @@ class NodeSpec(BaseModel):
 class EdgeSpec(BaseModel):
     from_id: str
     to_id: str
-    when: Optional[str] = None  # e.g., "MOVE:next"
-
-    def matches(self, decision: dict) -> bool:  # noqa: ANN001
-        action = decision.get("action")
-        if not self.when:
-            return False
-        # MOVE:<step_id>
-        if action == "MOVE" and self.when.startswith("MOVE:"):
-            step = decision.get("step_id")
-            return self.when == f"MOVE:{step}"
-        # RESPOND (wildcard)
-        if action == "RESPOND" and self.when.startswith("RESPOND"):
-            # RESPOND with optional tag: RESPOND:<tag>
-            if self.when == "RESPOND":
-                return True
-            # match RESPOND:<tag> against decision tag or response_tag
-            try_tag = None
-            for key in ("tag", "response_tag"):
-                if key in decision:
-                    try_tag = decision.get(key)
-                    break
-            if try_tag is None:
-                return False
-            return self.when == f"RESPOND:{try_tag}"
-        # END (wildcard)
-        if action == "END" and self.when == "END":
-            return True
-        return False
+    condition: Optional[str] = None  # natural-language condition for prompting
 
 
 class AgentSpec(BaseModel):
@@ -58,11 +31,11 @@ class AgentSpec(BaseModel):
         return [e.to_id for e in self.edges if e.from_id == current]
 
     def route(self, current: str, decision: dict) -> Optional[str]:  # noqa: ANN001
-        for e in self.edges:
-            if e.from_id != current:
-                continue
-            if e.matches(decision):
-                return e.to_id
+        # Runtime routes solely based on the decision-provided step_id
+        # and the set of allowed targets from the current node.
+        if decision.get("action") == "MOVE":
+            step = decision.get("step_id")
+            return step if step in self.allowed_targets(current) else None
         return None
 
     def validate_spec(self) -> None:
@@ -75,7 +48,7 @@ class AgentSpec(BaseModel):
                 raise ValueError(f"edge.from_id '{e.from_id}' not found in nodes")
             if e.to_id not in node_ids:
                 raise ValueError(f"edge.to_id '{e.to_id}' not found in nodes")
-            key = (e.from_id, e.to_id, e.when)
+            key = (e.from_id, e.to_id, e.condition)
             if key in seen:
                 raise ValueError(f"duplicate edge detected: {key}")
             seen.add(key)

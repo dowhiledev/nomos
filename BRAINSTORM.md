@@ -88,7 +88,8 @@ Proposed Architecture
 
 - Execution Graph (NomosGraph)
   - Typed DAG with event-sourcing; nodes are decision steps (LLM-driven) that can call tools internally (ReACT-style).
-  - Tools are not nodes. Routing is expressed as edges with conditions emitted by nodes; cycles allowed.
+  - Tools are not nodes. Edges carry natural-language conditions for prompting (documentation), not executable rules.
+  - The node’s Decision chooses a next step via `MOVE` + `step_id`; runtime validates the target against allowed edges.
   - Subgraphs compile to Agents and can be referenced as tools (agent-as-tool) for specialization.
   - Graph execution is async; node work can run concurrently where applicable; each node emits NodeEvents.
   - Checkpointer plugin persists node-level checkpoints and composes session-level checkpoint metadata.
