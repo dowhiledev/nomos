@@ -13,12 +13,12 @@ Non‑Negotiables
 - Developer‑first: library usage first; server is an optional transport.
 
 Module Boundaries (target layout)
-- `nomos-core`: event model, orchestrator, checkpointer, state projection, interrupt controller.
-- `nomos-graph`: graph builder (nodes/edges), compile→Agent, subgraph composition; HITL is node behavior, not a node type.
-- `nomos-llms-*`: providers with streaming + tool/function‑calling.
-- `nomos-tools`: async tool runner, budgets/timeouts/cancellation, isolation options; agent‑as‑tool adapter.
-- `nomos-server`: SSE/WS (and optional gRPC) endpoints + auth/limits; thin over core.
-- `nomos-observe`: OTEL tracing, metrics, timeline helpers.
+- `nomos.core`: event model, orchestrator, checkpointer, state projection, interrupt controller.
+- `nomos.graph`: graph builder (nodes/edges), compile→Agent, subgraph composition; HITL is node behavior, not a node type.
+- `nomos.llms-*`: providers with streaming + tool/function‑calling.
+- `nomos.tools`: async tool runner, budgets/timeouts/cancellation, isolation options; agent‑as‑tool adapter.
+- `nomos.server`: SSE/WS (and optional gRPC) endpoints + auth/limits; thin over core.
+- `nomos.observe`: OTEL tracing, metrics, timeline helpers.
 - `examples/`: user‑facing code only; no placeholders.
 
 Design Tenets
