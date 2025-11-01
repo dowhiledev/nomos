@@ -181,7 +181,7 @@ Library-First API (primary usage)
   - GET  /v2/sessions/{id}/state -> current materialized state
   - POST /v2/sessions/{id}/control -> {cancel, pause, resume, checkpoint}
 - WebSocket:
-  - Bi-directional events for tokens, tool progress, audio chunks; supports backpressure and acks.
+  - Bi-directional sessions: send user inputs and receive events over one connection; supports backpressure and acks.
 - gRPC (optional): streaming APIs mirroring WS for typed, high-throughput backends.
 Note: The server is an optional transport layer; the core dev workflow is library-first. Event routing/observability are handled by the core; users may simply consume streams or use the server’s SSE/WS endpoints.
 
@@ -257,7 +257,8 @@ Key APIs (Sketches)
 
 - Orchestrator
   - create_session() -> Session
-  - stream(session_id, inputs) -> AsyncIterator[SessionEvent]
+  - stream(session_id, inputs=None) -> AsyncIterator[SessionEvent]
+  - input(session_id, inputs) -> ack (enqueue user messages)
   - control(session_id, command) -> ack (pause/resume/cancel/checkpoint)
   - materialize_state(session_id) -> State
 
