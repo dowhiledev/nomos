@@ -7,7 +7,9 @@ authors = [
     { name = "chandralegend", email = "irugalbandarachandra@gmail.com" }
 ]
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "pydantic>=2.7"
+]
 
 [project.scripts]
 nomos = "nomos:main"

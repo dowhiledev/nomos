@@ -56,10 +56,18 @@ Contribution Rules
 - Add or update tests alongside code; do not weaken coverage for critical paths.
 - Breaking changes are acceptable during vNext development; document them clearly in PRs.
 
+Dependencies & Tooling
+- Use `uv` to add/remove dependencies (and to manage lockfiles), not raw pip/poetry.
+- Manage dev and optional dependencies via pyproject groups/extras (e.g., `uv add package --optional something` or `uv add package --dev`) — keep runtime deps minimal.
+- When adding/removing deps, document rationale in PR and ensure CI passes with the intended extras only.
+
+Documentation Discipline
+- After completing an overall step or phase, update IMPLEMENTATION_PLAN.md with status and any scope adjustments.
+- Keep BRAINSTORM.md and relevant .ddd artifacts in sync when domain/architecture decisions evolve.
+
 Things To Always Remember
 - Tools are invoked by nodes; do not add Tool nodes.
 - HITL is a node behavior (request input), not a node type.
 - The server is optional; library‑first usage is primary.
 - Event routing/observability belongs to core; user code should not replicate it.
 - No migration constraints: optimize for clarity and correctness.
-
