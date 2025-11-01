@@ -18,6 +18,8 @@ import inspect
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict
 from concurrent.futures import ProcessPoolExecutor
 from nomos.core.ports import ToolRunnerPort
+from nomos.core.tool_events import validate_tool_frame
+from nomos.core.types import ToolContext, ToolFrameType
 
 
 ToolCallable = Callable[..., Any]
@@ -46,8 +48,8 @@ class SimpleToolRunner(ToolRunnerPort):
             self._proc_pool = ProcessPoolExecutor(max_workers=processes)
 
     async def run(
-        self, tool_name: str, args: Dict[str, Any], ctx: Dict[str, Any]
-    ) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
+        self, tool_name: str, args: Dict[str, Any], ctx: ToolContext
+    ) -> AsyncIterator[ToolFrameType]:
         # ACL check
         if self._allowed is not None and tool_name not in self._allowed:
             yield {"type": "tool.error", "tool": tool_name, "error": "unauthorized"}
@@ -73,7 +75,15 @@ class SimpleToolRunner(ToolRunnerPort):
             res = fn(**call_kwargs)
             if inspect.isasyncgen(res):
                 async for frame in res:  # type: ignore[async-for-over-async-iterable]
-                    yield frame
+                    try:
+                        fr = validate_tool_frame(frame)
+                        yield fr.model_dump()
+                    except Exception:
+                        yield {
+                            "type": "tool.error",
+                            "tool": tool_name,
+                            "error": "invalid frame",
+                        }
                 return
             if asyncio.iscoroutine(res) or isinstance(res, Awaitable):
                 value = await res  # type: ignore[func-returns-value]

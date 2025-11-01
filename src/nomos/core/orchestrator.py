@@ -18,7 +18,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, AsyncIterator, Callable, Dict, Optional
 
-from .events import EventType, SessionEvent
+from .events import EventType, SessionEvent, TokenFrame, DecisionFrame
 from .state import SessionState
 from .store.memory import InMemoryEventStore
 from .store.checkpoint_memory import InMemoryCheckpointStore
@@ -178,13 +178,31 @@ class Orchestrator:
                             break
                         ftype = frame.get("type")
                         if ftype == EventType.TOKEN_EMITTED.value:
+                            try:
+                                tf = TokenFrame.model_validate(frame)
+                                data_payload = tf.data
+                            except Exception as exc:  # noqa: BLE001
+                                await self._append(
+                                    session_id,
+                                    [
+                                        SessionEvent(
+                                            session_id=session_id,
+                                            type=EventType.ERROR_OCCURRED.value,
+                                            data={
+                                                "message": f"invalid token frame: {exc}"
+                                            },
+                                        ).model_dump()
+                                    ],
+                                )
+                                inc(EventType.ERROR_OCCURRED.value)
+                                break
                             await self._append(
                                 session_id,
                                 [
                                     SessionEvent(
                                         session_id=session_id,
                                         type=EventType.TOKEN_EMITTED.value,
-                                        data=frame.get("data", {}),
+                                        data=data_payload,
                                     ).model_dump()
                                 ],
                             )
@@ -192,20 +210,38 @@ class Orchestrator:
                             # continue streaming provider frames
                             continue
                         elif ftype == EventType.DECISION_COMPLETED.value:
+                            try:
+                                df = DecisionFrame.model_validate(frame)
+                                ddata = df.data
+                            except Exception as exc:  # noqa: BLE001
+                                await self._append(
+                                    session_id,
+                                    [
+                                        SessionEvent(
+                                            session_id=session_id,
+                                            type=EventType.ERROR_OCCURRED.value,
+                                            data={
+                                                "message": f"invalid decision frame: {exc}"
+                                            },
+                                        ).model_dump()
+                                    ],
+                                )
+                                inc(EventType.ERROR_OCCURRED.value)
+                                break
                             await self._append(
                                 session_id,
                                 [
                                     SessionEvent(
                                         session_id=session_id,
                                         type=EventType.DECISION_COMPLETED.value,
-                                        data=frame.get("data", {}),
+                                        data=ddata,
                                         node_id=self._current_node.get(session_id),
                                     ).model_dump()
                                 ],
                             )
                             inc(EventType.DECISION_COMPLETED.value)
                             # If decision calls a tool, handle via tool runner
-                            data = frame.get("data", {}) or {}
+                            data = ddata or {}
                             action = data.get("action")
                             if action == "TOOL_CALL":
                                 tool_call = data.get("tool_call", {}) or {}
@@ -386,9 +422,7 @@ class Orchestrator:
         inc(EventType.CONTROL_APPLIED.value)
 
     async def stream(
-        self,
-        session_id: str,
-        inputs: Optional[Dict[str, Any]] = None,  # noqa: ANN401
+        self, session_id: str, inputs: Optional[Dict[str, Any]] = None
     ) -> AsyncIterator[Dict[str, Any]]:
         # If initial inputs provided, enqueue them first
         if inputs:

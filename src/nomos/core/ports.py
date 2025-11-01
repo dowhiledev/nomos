@@ -7,25 +7,23 @@ Adapters will implement these in provider/tool/store/server packages.
 from __future__ import annotations
 
 from typing import Any, AsyncIterator, Dict, List, Protocol
+from .types import ProviderSchema, ProviderFrame, ToolFrameType
 
 
 class LLMProviderPort(Protocol):
     async def stream_decision(
-        self, messages: List[Dict[str, Any]], schema: Any
-    ) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
-        ...
+        self, messages: List[Dict[str, Any]], schema: ProviderSchema
+    ) -> AsyncIterator[ProviderFrame]: ...
 
     async def stream_generate(
         self, messages: List[Dict[str, Any]]
-    ) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
-        ...
+    ) -> AsyncIterator[ProviderFrame]: ...
 
 
 class ToolRunnerPort(Protocol):
     async def run(
         self, tool_name: str, args: Dict[str, Any], ctx: Dict[str, Any]
-    ) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
-        ...
+    ) -> AsyncIterator[ToolFrameType]: ...
 
 
 class EventStorePort(Protocol):

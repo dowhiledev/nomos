@@ -12,8 +12,10 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 import json
 
 from nomos.core.events import EventType, TokenFrame, DecisionFrame
+from nomos.core.schemas import Message
 from pydantic import BaseModel
 from nomos.core.ports import LLMProviderPort
+from nomos.core.types import ProviderSchema, ProviderFrame
 
 
 def _to_openai_content(parts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:  # noqa: ANN401
@@ -34,12 +36,22 @@ def _to_openai_content(parts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:  # 
 
 
 def _to_openai_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:  # noqa: ANN401
+    # Normalize to typed Message for validation, then build provider payloads
     oai: List[Dict[str, Any]] = []
     for m in messages:
-        role = m.get("role")
-        content = m.get("content")
+        try:
+            typed = Message.model_validate(m)
+            role = typed.role
+            content = typed.content
+        except Exception:
+            # best-effort fallback for raw dicts
+            role = m.get("role")
+            content = m.get("content")
         if isinstance(content, list):
-            oai.append({"role": role, "content": _to_openai_content(content)})
+            raw_parts = [
+                c.model_dump() if hasattr(c, "model_dump") else c for c in content
+            ]
+            oai.append({"role": role, "content": _to_openai_content(raw_parts)})
         else:
             oai.append({"role": role, "content": content})
     return oai
@@ -53,8 +65,8 @@ class OpenAIProvider(LLMProviderPort):
         self._client = client
 
     async def stream_decision(
-        self, messages: List[Dict[str, Any]], schema: Any
-    ) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
+        self, messages: List[Dict[str, Any]], schema: ProviderSchema
+    ) -> AsyncIterator[ProviderFrame]:
         # If a test client is provided that exposes a `chat.completions.create` streaming iterator,
         # use it; otherwise attempt to create a default OpenAI client lazily.
         client = self._client
@@ -177,7 +189,7 @@ class OpenAIProvider(LLMProviderPort):
 
     async def stream_generate(
         self, messages: List[Dict[str, Any]]
-    ) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
+    ) -> AsyncIterator[ProviderFrame]:
         # Implement in terms of stream_decision and pass through token events only
         async for frame in self.stream_decision(messages, schema=None):  # type: ignore[arg-type]
             if frame.get("type") == EventType.TOKEN_EMITTED.value:

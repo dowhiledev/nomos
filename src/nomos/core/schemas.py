@@ -1,0 +1,61 @@
+"""Typed schemas for core message and decision content.
+
+Pydantic v2 models are used to validate inputs and provider outputs.
+"""
+
+from __future__ import annotations
+
+from typing import List, Literal, Optional, Union
+
+from pydantic import BaseModel, Field
+
+
+class TextPart(BaseModel):
+    type: Literal["text"] = "text"
+    data: str
+
+
+class ImagePart(BaseModel):
+    type: Literal["image"] = "image"
+    data: dict
+    mime: Optional[str] = None
+
+
+ContentPart = Union[TextPart, ImagePart]
+
+
+class Message(BaseModel):
+    role: Literal["user", "assistant", "system"]
+    content: Union[str, List[ContentPart]]
+
+
+class ToolCall(BaseModel):
+    tool_name: str
+    tool_kwargs: dict = Field(default_factory=dict)
+    tool_kwargs_parsed: Optional[dict] = None
+
+
+class RespondPayload(BaseModel):
+    action: Literal["RESPOND"] = "RESPOND"
+    response: str
+    parsed: Optional[dict] = None
+
+
+class ToolCallPayload(BaseModel):
+    action: Literal["TOOL_CALL"] = "TOOL_CALL"
+    tool_call: ToolCall
+
+
+DecisionPayload = Union[RespondPayload, ToolCallPayload]
+
+
+__all__ = [
+    "TextPart",
+    "ImagePart",
+    "ContentPart",
+    "Message",
+    "ToolCall",
+    "RespondPayload",
+    "ToolCallPayload",
+    "DecisionPayload",
+]
