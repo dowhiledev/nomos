@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from enum import Enum
 from typing import Any, Dict, Optional
+from typing_extensions import Literal
 
 from pydantic import BaseModel, Field
 
@@ -36,4 +37,20 @@ class SessionEvent(BaseModel):
     event_id: Optional[str] = None
 
 
-__all__ = ["EventType", "SessionEvent"]
+class TokenFrame(BaseModel):
+    """Typed frame for token streaming from provider adapters."""
+
+    type: Literal[EventType.TOKEN_EMITTED.value] = EventType.TOKEN_EMITTED.value
+    data: Dict[str, Any]
+
+
+class DecisionFrame(BaseModel):
+    """Typed frame for final provider decisions (RESPOND or TOOL_CALL)."""
+
+    type: Literal[EventType.DECISION_COMPLETED.value] = (
+        EventType.DECISION_COMPLETED.value
+    )
+    data: Dict[str, Any]
+
+
+__all__ = ["EventType", "SessionEvent", "TokenFrame", "DecisionFrame"]

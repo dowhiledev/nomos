@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any, AsyncIterator, Dict, List, Optional
 import json
 
-from nomos.core.events import EventType
+from nomos.core.events import EventType, TokenFrame, DecisionFrame
 from nomos.core.ports import LLMProviderPort
 
 
@@ -93,10 +93,9 @@ class OpenAIProvider(LLMProviderPort):
                     content = delta.get("content")
             if content:
                 full_text.append(content)
-                yield {
-                    "type": EventType.TOKEN_EMITTED.value,
-                    "data": {"role": "assistant", "delta": content},
-                }
+                yield TokenFrame(
+                    data={"role": "assistant", "delta": content}
+                ).model_dump()
 
             # Handle function/tool-calling deltas
             tool_delta = None
@@ -148,19 +147,17 @@ class OpenAIProvider(LLMProviderPort):
                 tool_kwargs = json.loads(raw_args) if raw_args else {}
             except Exception:
                 tool_kwargs = {"__raw__": raw_args}
-            yield {
-                "type": EventType.DECISION_COMPLETED.value,
-                "data": {
+            yield DecisionFrame(
+                data={
                     "action": "TOOL_CALL",
                     "tool_call": {"tool_name": tool_name, "tool_kwargs": tool_kwargs},
-                },
-            }
+                }
+            ).model_dump()
         else:
             response_text = "".join(full_text)
-            yield {
-                "type": EventType.DECISION_COMPLETED.value,
-                "data": {"action": "RESPOND", "response": response_text},
-            }
+            yield DecisionFrame(
+                data={"action": "RESPOND", "response": response_text}
+            ).model_dump()
 
     async def stream_generate(
         self, messages: List[Dict[str, Any]]

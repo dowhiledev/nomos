@@ -148,6 +148,7 @@ Library-First API (primary usage)
 - Execution API:
   - run(args, ctx) -> async iterator emitting tool.progress/tool.stdout events; supports cancellation tokens via ctx["cancel_event"].
   - Return structured results; optionally stream partial result frames.
+  - Developer ergonomics: `@tool` decorator + `registry_from_tools` to register and configure tools (name, timeout, permissions). Basic ACL supported in runner.
 - MCP-native: server registry, discovery, health check; tools pulled at runtime; streaming over MCP where possible.
 - Concurrency: multiple tool calls in parallel; scheduler enforces session/tenant budgets.
 
@@ -166,6 +167,7 @@ Library-First API (primary usage)
 - Topologies: Supervisor-Worker, Debate, Specialist Panels, DAG pipelines, hierarchical planners.
 - Shared channel bus per team: agents communicate via typed events with routing keys and ACLs.
 - Subgraph spawning: ephemeral sub-agents for specialized tasks; resource quotas; lifecycle events.
+ - Agent-as-tool adapter: construct a tool from an Agent and provider; nested agent tokens stream as tool.stdout; returns tool.completed with decision.
 - Coordination nodes: RouterNode with learned or rule-based policies; Vote/Merge nodes with reducers.
 
 8) Observability & Telemetry
@@ -173,6 +175,7 @@ Library-First API (primary usage)
 - Metrics: per-session latency, tokens/sec, error rates, tool durations, interrupt reactions. Lightweight defaults provided (counters + timing histograms), OTEL optional.
 - Logs: structured JSON; optional sampling; correlation IDs for session, node, tool.
 - Timeline explorer API: query events by session/node/time; replay timeline in UI.
+ - Metrics endpoint `/v2/metrics` exposes counters and timing averages for quick introspection (OTEL optional).
 
 9) API Surface (Server)
 - HTTP:

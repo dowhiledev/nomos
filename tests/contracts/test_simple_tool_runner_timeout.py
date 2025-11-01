@@ -22,4 +22,3 @@ async def test_simple_tool_runner_timeout_errors():
     assert frames[0]["type"] == "tool.started"
     assert frames[-1]["type"] == "tool.error"
     assert frames[-1]["error"] == "timeout"
-

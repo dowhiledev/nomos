@@ -11,4 +11,3 @@ async def test_simple_tool_runner_unknown_tool_yields_error():
         frames.append(frame)
     assert frames[-1]["type"] == "tool.error"
     assert frames[-1]["error"] == "unknown tool"
-

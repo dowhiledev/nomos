@@ -25,14 +25,25 @@ ToolCallable = Callable[..., Any]
 
 class SimpleToolRunner(ToolRunnerPort):
     def __init__(
-        self, registry: Dict[str, ToolCallable], *, timeout_s: float | None = None
+        self,
+        registry: Dict[str, ToolCallable],
+        *,
+        timeout_s: float | None = None,
+        allowed_tools: set[str] | None = None,
+        execution_mode: str = "inline",  # inline | thread
     ) -> None:
         self._registry = registry
         self._timeout = timeout_s
+        self._allowed = allowed_tools
+        self._exec_mode = execution_mode
 
     async def run(
         self, tool_name: str, args: Dict[str, Any], ctx: Dict[str, Any]
     ) -> AsyncIterator[Dict[str, Any]]:  # noqa: ANN401
+        # ACL check
+        if self._allowed is not None and tool_name not in self._allowed:
+            yield {"type": "tool.error", "tool": tool_name, "error": "unauthorized"}
+            return
         fn = self._registry.get(tool_name)
         if not fn:
             yield {"type": "tool.error", "tool": tool_name, "error": "unknown tool"}
@@ -59,16 +70,24 @@ class SimpleToolRunner(ToolRunnerPort):
             if asyncio.iscoroutine(res) or isinstance(res, Awaitable):
                 value = await res  # type: ignore[func-returns-value]
             else:
-                value = res
+                if self._exec_mode == "thread":
+                    loop = asyncio.get_running_loop()
+                    value = await loop.run_in_executor(None, lambda: res)
+                else:
+                    value = res
             yield {"type": "tool.completed", "tool": tool_name, "result": value}
 
         # Emit started
         yield {"type": "tool.started", "tool": tool_name}
 
+        # adopt per-tool timeout metadata if runner-level timeout not set
+        to = self._timeout
+        if to is None:
+            to = getattr(fn, "__tool_timeout__", None)
         agen = _execute()
         try:
-            if self._timeout:
-                async for frame in _iterate_with_timeout(agen, self._timeout):
+            if to:
+                async for frame in _iterate_with_timeout(agen, to):
                     yield frame
             else:
                 async for frame in agen:

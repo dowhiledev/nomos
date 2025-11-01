@@ -54,6 +54,7 @@ Spike 3 — Async LLM Streaming Adapter (OpenAI)
  - Status: Completed
    - OpenAIProvider supports token streaming, RESPOND aggregation, basic tool/function-calling deltas → TOOL_CALL.
    - Content-parts mapping implemented (text, image-url). Error behavior covered via fake/malformed clients. Real client behind optional extra.
+   - Typed frame models (TokenFrame, DecisionFrame) defined and used to produce frames.
 
 Spike 4 — Tool Runner 2.0 (Async, Progress, Cancellation)
 - Goals: Async tool contract with progress/partial outputs; budgets/timeouts; safe execution.
@@ -64,6 +65,7 @@ Spike 4 — Tool Runner 2.0 (Async, Progress, Cancellation)
  - Status: Completed
    - SimpleToolRunner supports async generators and coroutines; passes ctx (including cancel_event) to tools.
    - Per-frame timeout enforced; unknown tools yield structured errors; mid-tool cancel tested via orchestrator cancel.
+   - @tool decorator + registry builder added; per-tool timeout metadata honored; basic ACL (allowed_tools) supported; optional thread offload for sync tools.
 
 Spike 5 — Graph Runtime MVP (Nodes Only)
 - Goals: Compose nodes and edges; compile() → Agent; execute via orchestrator.
@@ -75,6 +77,7 @@ Spike 5 — Graph Runtime MVP (Nodes Only)
  - Status: Completed
    - AgentSpec with MOVE/RESPOND routing; validation (dangling edges, reachability, duplicates).
    - Builder DSL fixed for Pydantic v2 and isolation; prompt helper added; tests for builder isolation.
+   - Graph/LLMNode/Edge runtime API added; compile() produces AgentSpec; example parity achievable.
 
 Spike 6 — Checkpointing + Replay
 - Goals: Deterministic recovery; event-log → state reconstruction; node-boundary checkpoints.
@@ -85,6 +88,7 @@ Spike 6 — Checkpointing + Replay
  - Status: Completed
    - In-memory checkpoint store and APIs for create/restore; events emitted.
    - Replay utility projects timeline → state; parity verified with materialized state.
+   - Optional Redis/Postgres adapters added behind extras (not covered in CI).
 
 Spike 7 — WS/SSE Server (duplex)
 - Goals: Optional transport to consume events and control sessions remotely.
