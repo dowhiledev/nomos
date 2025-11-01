@@ -7,7 +7,7 @@ Summary
 - Competitive aim: match and surpass LangGraph’s state graph + checkpointing model and Google ADK’s real-time, multimodal, event loop by offering a unified, developer-friendly architecture with stronger tool/runtime primitives and auditable event logs.
 
 Developer-First Positioning
-- Code-first: Python APIs to define graphs, nodes, tools, and event handlers; server is optional.
+- Code-first: Python APIs to define graphs, nodes, and tools; event routing/observability handled by core; server is optional.
 - Explicit over implicit: minimal magic, strong typing, predictable execution semantics.
 - Power-user ergonomics: hot-reload dev server, structured logs, rich tracing, and deterministic replay.
 - Config and low-code: added later via generators on top of stable core APIs (YAML/JSON optional, not required).
@@ -67,9 +67,9 @@ Design Goals for vNext
 
 Package/Module Layout (proposed)
 - `nomos-core`: event model, orchestrator, checkpointer, state projection.
-- `nomos-graph`: graph runtime, node contracts (LLM/Tool/Router/Human/Memory/etc.).
+- `nomos-graph`: graph runtime, node contract (Step/LLM), edges/conditions, subgraph composition; HITL as node behavior.
 - `nomos-llms-*`: provider shims (openai, groq, anthropic, google, ollama) with streaming + function calling.
-- `nomos-tools`: tool runner, isolation/sandbox, MCP client integration.
+- `nomos-tools`: tool runner, isolation/sandbox, MCP client integration; agent-as-tool adapter.
 - `nomos-server`: HTTP/SSE + WebSocket endpoints; optional gRPC; auth hooks; rate-limits.
 - `nomos-observe`: OTEL setup, metrics exporters, timeline explorer helpers.
 - `nomos-sdk-ts`: TS client for event streams + control plane (types from OpenAPI + event schemas).
@@ -87,9 +87,10 @@ Proposed Architecture
   - Enforces budgets, timeouts, backpressure; handles cancellation and preemption.
 
 - Execution Graph (NomosGraph)
-  - Typed DAG akin to LangGraph’s StateGraph but with multimodal content and event-sourcing.
-  - Node types: LLMNode, ToolNode, RouterNode, MergeNode, HumanNode, SubgraphNode, Map/ReduceNode, MemoryNode.
-  - Graph execution is async; nodes can run in parallel (with configurable concurrency). Each node emits NodeEvents.
+  - Typed DAG with event-sourcing; nodes are decision steps (LLM-driven) that can call tools internally (ReACT-style).
+  - Tools are not nodes. Routing is expressed as edges with conditions emitted by nodes; cycles allowed.
+  - Subgraphs compile to Agents and can be referenced as tools (agent-as-tool) for specialization.
+  - Graph execution is async; node work can run concurrently where applicable; each node emits NodeEvents.
   - Checkpointer plugin persists node-level checkpoints and composes session-level checkpoint metadata.
 
 - State & Checkpointing
@@ -99,20 +100,27 @@ Proposed Architecture
 
 - Capability Adapters
   - LLMs: async streaming providers with unified token/event interface, including tool/function-calling and image/audio support.
-  - Tools: wrappers for Python callables, MCP servers, REST/RPC APIs; async execution with cancellation and progress updates.
-  - Memory: vector store adapters (pgvector, Weaviate, qdrant), BM25, hybrid.
+  - Tools: wrappers for Python callables, MCP servers, REST/RPC APIs; async execution with cancellation and progress updates; agent-as-tool.
+  - Memory: vector store adapters (pgvector, Weaviate, qdrant), BM25, hybrid (as components, not nodes).
   - Media: STT/TTS adapters (Whisper, Deepgram, Realtime APIs), image pre/post-processing.
 
 Library-First API (primary usage)
 - Compose and run graphs in-process; server transport is optional.
-- Example sketch:
-  - graph = Graph().add(
-      LLMNode(id="decide", provider=openai, schema=DecisionModel),
-      ToolNode(id="tool", tool=search, timeout=10),
-      RouterNode(id="route", policy=rule_or_model)
-    ).edge("decide", "route").edge("route:TOOL", "tool").edge("route:RESPOND", "out")
-  - async for event in Orchestrator(graph).run(inputs):
-      handle(event)
+- Example sketch (nodes-only; tools called inside nodes; edges encode routing):
+  - agent = (
+      Graph(name="demo", llm="openai:gpt-4o")
+        .add(
+          LLMNode(id="intake", prompt="collect requirements"),
+          LLMNode(id="work", prompt="do work with tools", tools=[web_search, db_query, as_tool(specialist)]),
+          LLMNode(id="finalize", prompt="produce final output")
+        )
+        .edge(Edge("intake", "work", when="MOVE:work"))
+        .edge(Edge("work", "finalize", when="MOVE:finalize"))
+        .compile()
+    )
+  - session = await Orchestrator(agent).create_session()
+  - async for evt in Orchestrator(agent).stream(session_id=session.id, inputs=...):
+      ... # optional consumption; core handles routing/observability
 
 2) Event Model (first-class contract)
 - Core envelope: SessionEvent { session_id, event_id, ts, type, data, span_ctx }
@@ -175,7 +183,7 @@ Library-First API (primary usage)
 - WebSocket:
   - Bi-directional events for tokens, tool progress, audio chunks; supports backpressure and acks.
 - gRPC (optional): streaming APIs mirroring WS for typed, high-throughput backends.
-Note: The server is an optional transport layer; the core dev workflow is library-first.
+Note: The server is an optional transport layer; the core dev workflow is library-first. Event routing/observability are handled by the core; users may simply consume streams or use the server’s SSE/WS endpoints.
 
 10) Persistence & Scaling
 - Stateless orchestrators; durable event log + checkpoint store provide recovery and scale-out.
@@ -214,7 +222,7 @@ Phase 1 — Core Runtime & Streaming (weeks 1–4)
 - Replace pickle with JSON State + minimal checkpointing; OTEL spans around nodes.
 
 Phase 2 — Graph + Checkpointing (weeks 3–6)
-- NomosGraph runtime with node types (LLM, Tool, Router, Human); parallel node execution.
+- NomosGraph runtime with decision nodes (LLM) only; tools invoked inside nodes; edges/conditions control routing; cycles supported; HITL as node behavior.
 - Checkpointer plugin (Redis + Postgres) and basic replay; deterministic routing where possible.
 - TS SDK v2 with event stream consumption; basic CLI to inspect timelines.
 
@@ -248,8 +256,9 @@ Key APIs (Sketches)
   - async def run(args, ctx: ToolContext) -> AsyncIterator[ToolEvent]; supports cancel via ctx.cancelled
 
 - Orchestrator
-  - submit(command) -> enqueue; returns ack
-  - events(session_id) -> AsyncIterator[SessionEvent]
+  - create_session() -> Session
+  - stream(session_id, inputs) -> AsyncIterator[SessionEvent]
+  - control(session_id, command) -> ack (pause/resume/cancel/checkpoint)
   - materialize_state(session_id) -> State
 
 
@@ -277,9 +286,9 @@ Quick Wins While Building vNext
 Deliverables Checklist
 - Event schema + stores (in-memory, Redis, Postgres)
 - Async LLM streaming for 1–2 providers (OpenAI, Groq)
-- Async ToolRunner with cancel/timeouts and progress
+- Async ToolRunner with cancel/timeouts and progress; agent-as-tool adapter
 - SSE/WS server endpoints + TS SDK v2
-- NomosGraph MVP (LLM, Tool, Router nodes) + Checkpointing
+- NomosGraph MVP (decision nodes only; edges routing; subgraphs) + Checkpointing
 - Interrupt controller + control APIs
 - Multimodal content-part model + image/voice adapters (MVP)
 
