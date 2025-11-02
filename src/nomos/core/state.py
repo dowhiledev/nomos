@@ -15,6 +15,7 @@ class SessionState(BaseModel):
     current_node: Optional[str] = None
     last_action: Optional[str] = None
     history_tail: List[SessionEvent] = Field(default_factory=list)
+    messages: List[Dict[str, Any]] = Field(default_factory=list)
     flow_state: Optional[Dict[str, Any]] = None
     checkpoints: List[Checkpoint] = Field(default_factory=list)
 

@@ -71,7 +71,7 @@ def _format_messages_table(messages: List[Dict[str, Any]]) -> Table:
         else:
             content_text = str(content)
 
-        preview = content_text[:150] + ("..." if len(content_text) > 150 else "")
+        preview = content_text
         table.add_row(role, preview)
 
     return table
@@ -105,9 +105,8 @@ def _format_decision(decision_data: Dict[str, Any]) -> Panel:
         content.append(f"Args: {tool_kwargs}", style="dim")
     elif action == "RESPOND":
         response = decision_data.get("response", "")
-        response_preview = response[:100] + ("..." if len(response) > 100 else "")
         content.append("Response: ", style="bold")
-        content.append(f"{response_preview}", style="green")
+        content.append(f"{response}", style="green")
 
     return Panel(content, title="🤖 Decision", border_style=color, expand=False)
 
@@ -155,6 +154,7 @@ class Orchestrator:
         self._input_queues: Dict[str, asyncio.Queue[Dict[str, Any]]] = {}
         self._workers: Dict[str, asyncio.Task] = {}
         self._current_node: Dict[str, Optional[str]] = {}
+        self._messages: Dict[str, List[Dict[str, Any]]] = {}
         self._cancel_flags: Dict[str, bool] = {}
         self._cancel_events: Dict[str, asyncio.Event] = {}
         self._resume_events: Dict[str, asyncio.Event] = {}
@@ -232,6 +232,10 @@ class Orchestrator:
         if isinstance(inputs, dict):
             inputs = SessionInput.model_validate(inputs)
         assert isinstance(inputs, SessionInput)
+        # Accumulate messages
+        self._messages.setdefault(session_id, []).extend(
+            [msg.model_dump() if hasattr(msg, "model_dump") else msg for msg in inputs.messages]
+        )
         await self._append(
             session_id,
             [
@@ -304,11 +308,17 @@ class Orchestrator:
 
                 # Agent loop: continue making decisions within this input until RESPOND or max turns
                 turns = 0
-                messages_base = list(payload.get("messages", []))
+                messages_base = list(self._messages.get(session_id, []))
                 while True:
                     turns += 1
                     if turns > 5:  # Allow up to 5 turns for tool calls
                         break
+                    # Get current node for this turn (may have changed due to routing)
+                    current_node_id = self._current_node.get(session_id)
+
+                    if self._verbose:
+                        _console.rule(f"[bold yellow]Node: {current_node_id}[/bold yellow]")
+
                     with (
                         span("provider.stream_decision"),
                         measure("provider.stream_decision"),
@@ -410,6 +420,14 @@ class Orchestrator:
 
                             data = decision_data
                             action = data.get("action")
+                            if action == "RESPOND":
+                                response = data.get("response", "")
+                                assistant_msg = {
+                                    "role": "assistant",
+                                    "content": [{"type": "text", "data": response}]
+                                }
+                                messages_base.append(assistant_msg)
+                                self._messages[session_id].append(assistant_msg)
                             if action == "TOOL_CALL":
                                 tool_call = data.get("tool_call", {}) or {}
                                 tool_name = tool_call.get("tool_name")
@@ -520,6 +538,7 @@ class Orchestrator:
                                                 ],
                                             }
                                         )
+                                        self._messages[session_id].append(messages_base[-1])
                             # Handle routing (MOVE) only on decision frame
                             if isinstance(self._agent, AgentSpec) and action == "MOVE":
                                 to_id = self._agent.route(
@@ -557,7 +576,7 @@ class Orchestrator:
                                     self._current_node[session_id] = to_id
                             # End after one decision turn per input
                         # End after one decision turn per input (multi-turn handled by client or future loop)
-                        if decision_data and decision_data.get("action") == "RESPOND":
+                        if decision_data and decision_data.get("action") in ("RESPOND",):
                             done = True
                     if done:
                         break

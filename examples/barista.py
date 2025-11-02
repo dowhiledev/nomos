@@ -5,7 +5,8 @@ It uses a graph-based workflow with OpenAI for natural language understanding.
 """
 
 import asyncio
-from typing import Any, Dict
+from typing import Any, Dict, Literal, Optional
+import uuid
 
 from dotenv import load_dotenv
 
@@ -20,6 +21,7 @@ load_dotenv()
 
 # In-memory state (demo only)
 _cart: list[dict] = []
+_sales: list[dict] = []
 
 # Create tool runner
 runner = SimpleToolRunner()
@@ -28,49 +30,126 @@ runner = SimpleToolRunner()
 # Tools
 @runner.tool("get.options")
 async def get_available_coffee_options():
-    """Get available coffee options."""
-    await asyncio.sleep(0)
-    opts = [
-        {"type": "Espresso", "sizes": ["S", "M", "L"], "prices": [2.5, 3.0, 3.5]},
-        {"type": "Latte", "sizes": ["S", "M", "L"], "prices": [3.0, 3.5, 4.0]},
+    """
+    Get available coffee options, sizes, and prices.
+    """
+    coffee_options = [
+        {
+            "type": "Espresso",
+            "sizes": ["Small", "Medium", "Large"],
+            "prices": [2.5, 3.0, 3.5],
+        },
+        {
+            "type": "Latte",
+            "sizes": ["Small", "Medium", "Large"],
+            "prices": [3.0, 3.5, 4.0],
+        },
+        {
+            "type": "Cappuccino",
+            "sizes": ["Small", "Medium", "Large"],
+            "prices": [3.0, 3.5, 4.0],
+        },
     ]
-    return opts
+    return f"Available coffee options: {coffee_options}"
+
+
+def get_total_price() -> float:
+    """
+    Calculate the total price of all orders in the cart.
+    """
+    total_price = sum(item["price"] for item in _cart)
+    return total_price
 
 
 @runner.tool("add.to.cart")
-async def add_to_cart(coffee_type: str, size: str, price: float):
-    """Add coffee to cart."""
-    _cart.append({"coffee_type": coffee_type, "size": size, "price": price})
-    await asyncio.sleep(0)
-    return {"ok": True, "count": len(_cart)}
+def add_to_cart(coffee_type: str, size: str, price: float) -> str:
+    """
+    Add a coffee item to the cart.
+    """
+    global _cart
+    item_id = str(uuid.uuid4())
+    _cart.append(
+        {
+            "item_id": item_id,
+            "coffee_type": coffee_type,
+            "size": size,
+            "price": price,
+        }
+    )
+    current_total = get_total_price()
+    return f"Item {item_id} added to cart. Current total: ${current_total:.2f}"
+
+
+@runner.tool("remove.item")
+def remove_item(item_id: str) -> str:
+    """
+    Remove an item from the cart.
+    """
+    global _cart
+    _cart = [item for item in _cart if item["item_id"] != item_id]
+    return f"Item {item_id} removed successfully."
 
 
 @runner.tool("get.summary")
-async def get_order_summary():
-    """Get order summary."""
-    total = sum(i["price"] for i in _cart)
-    await asyncio.sleep(0)
-    return {"items": list(_cart), "total": total}
+async def get_order_summary() -> str:
+    """
+    Get a summary of all items in the cart.
+    """
+    if not _cart:
+        return "No Items in the cart."
+    summary = "\n".join(
+        f"Item ID: {item['item_id']}, Coffee: {item['coffee_type']}, Size: {item['size']}, Price: ${item['price']:.2f}"
+        for item in _cart
+    )
+    await asyncio.sleep(0.5)
+    return f"Order Summary:\n{summary}\nTotal Price: ${get_total_price():.2f}"
 
 
 @runner.tool("clear.cart")
-async def clear_cart():
-    """Clear the cart."""
-    _cart.clear()
-    await asyncio.sleep(0)
-    return {"ok": True}
+def clear_cart() -> str:
+    """
+    Clear all items from the cart.
+    """
+    global _cart
+    _cart = []
+    return "All items cleared successfully."
 
 
 @runner.tool("finalize.order", timeout=5)
-def finalize_order(payment_method: str, payment: float | None = None, ctx=None):
-    """Finalizes the Order."""
-    total = sum(i["price"] for i in _cart)
-    change = (payment or 0) - total if payment_method == "Cash" else 0
-    if ctx:
-        ctx.emit("tool.progress", "process_payment")
-        ctx.emit("tool.stdout", f"total: {total}")
-    _cart.clear()
-    return {"ok": True, "change": change}
+async def finalize_order(
+    payment_method: Literal["Card", "Cash"], payment: Optional[float] = None
+) -> str:
+    """
+    Finalize the order and clear the cart.
+    """
+    global _cart, _sales
+    if not _cart:
+        return "No orders to finalize."
+    total_price = get_total_price()
+    balance = payment - total_price if (payment and payment_method == "Cash") else None
+    if balance < 0:
+        return (
+            f"Insufficient payment amount for the order. Requires ${-balance:.2f} more."
+        )
+    _sales.append(
+        {
+            "order_id": str(uuid.uuid4()),
+            "total_price": total_price,
+            "payment_method": payment_method,
+            "payment": payment,
+            "balance": payment - total_price if payment else None,
+            "items": _cart.copy(),
+        }
+    )
+    clear_cart()
+    if balance is not None or balance > 0:
+        return (
+            f"Order finalized! Total price: ${total_price:.2f}. "
+            f"Payment method: {payment_method}. Change: ${balance:.2f}. Thank you for your order!"
+        )
+    return (
+        f"Order finalized! Total price: ${total_price:.2f}. Thank you for your order!"
+    )
 
 
 async def main() -> None:
@@ -80,51 +159,112 @@ async def main() -> None:
         .add(
             Step(
                 id="greeting",
-                prompt="Determine if the customer wants to place an order. If they do, transition to order_entry. Otherwise, greet them and ask how to help.",
+                prompt=(
+                    "Greet the customer warmly and ask how you can help them today. "
+                    "Use the `get.options` tool to get familiar with available options. "
+                    "If the customer mentions a specific coffee preference, check if it's available. "
+                    "When the customer is ready to order, transition to the ordering flow."
+                ),
                 tools=["get.options"],
             ),
             Step(
                 id="order_entry",
-                prompt="Help the customer build their order. Ask for coffee preference and size. Use get.options to check availability. Use add.to.cart when customer confirms.",
-                tools=["get.options", "add.to.cart", "clear.cart"],
+                prompt=(
+                    "Help the customer build their order step by step. "
+                    "Ask for their coffee preference and size. "
+                    "Use `get.options` to check availability. "
+                    "Use `add.to.cart` to add items when customer confirms their choice. "
+                    "Use `remove_item` if they want to modify their order. "
+                    "Use `clear.cart` if they want to start over. "
+                    "When they're ready to review and finalize, move to checkout flow."
+                ),
+                tools=["get.options", "add.to.cart", "clear.cart", "remove.item"],
             ),
             Step(
                 id="order_review",
-                prompt="Review the order and total using get.summary. Ask if ready to pay.",
+                prompt=(
+                    "Review the customer's complete order using `get.summary`. "
+                    "Present the total price clearly and confirm all items. "
+                    "If customer wants to modify the order, return to order entry. "
+                    "When customer confirms, proceed to payment processing."
+                ),
                 tools=["get.summary"],
             ),
             Step(
                 id="payment_processing",
-                prompt="Process payment using finalize.order.",
+                prompt=(
+                    "Process the customer's payment. Ask for their preferred payment method (Card or Cash). "
+                    "If paying with cash, ask for the payment amount. "
+                    "Use `finalize.order` tool to complete the transaction. "
+                    "Provide receipt and thank the customer."
+                ),
                 tools=["finalize.order"],
             ),
-            Step(id="order_completed", prompt="Thank the customer and end session."),
+            Step(
+                id="order_completed",
+                prompt=(
+                    "Confirm the order is complete and provide order details. "
+                    "Thank the customer and ask if they need anything else. "
+                    "If they want to place another order, return to greeting."
+                ),
+            ),
             Step(
                 id="order_cancelled",
-                prompt="Cancel order and clear cart.",
+                prompt=(
+                    "Handle order cancellation gracefully. Use `clear.cart` to remove all items. "
+                    "Apologize for any inconvenience and ask if they'd like to try again later."
+                ),
                 tools=["clear.cart"],
             ),
-            Step(id="session_end", prompt="End session.", tools=["clear.cart"]),
+            Step(
+                id="session_end",
+                prompt=(
+                    "End the session gracefully. Thank the customer for visiting and wish them well. "
+                    "Clear any remaining cart items for cleanup."
+                ),
+                tools=["clear.cart"],
+            ),
         )
         .edge(
             Transition(
                 from_id="greeting",
                 to_id="order_entry",
-                when="Customer wants to place an order",
+                when="Customer is ready to place an order or wants to browse menu",
             )
         )
         .edge(
             Transition(
                 from_id="order_entry",
                 to_id="order_review",
-                when="Customer wants to review order",
+                when="CCustomer wants to review their order or proceed to checkout",
+            )
+        )
+        .edge(
+            Transition(
+                from_id="order_entry",
+                to_id="greeting",
+                when="Customer wants to cancel the order completely",
+            )
+        )
+        .edge(
+            Transition(
+                from_id="order_review",
+                to_id="order_entry",
+                when="Customer wants to modify their order or add more items",
             )
         )
         .edge(
             Transition(
                 from_id="order_review",
                 to_id="payment_processing",
-                when="Customer confirms payment",
+                when="Customer confirms the order and wants to proceed with payment",
+            )
+        )
+        .edge(
+            Transition(
+                from_id="order_review",
+                to_id="order_cancelled",
+                when="Customer wants to cancel the order",
             )
         )
         .edge(
@@ -136,16 +276,37 @@ async def main() -> None:
         )
         .edge(
             Transition(
-                from_id="order_review",
-                to_id="order_cancelled",
-                when="Customer wants to cancel",
+                from_id="payment_processing",
+                to_id="order_review",
+                when="Payment fails or customer wants to review order again",
             )
         )
         .edge(
             Transition(
                 from_id="order_completed",
                 to_id="session_end",
-                when="Session complete",
+                when="Customer is done and wants to leave",
+            )
+        )
+        .edge(
+            Transition(
+                from_id="order_completed",
+                to_id="greeting",
+                when="Customer wants to place another order",
+            )
+        )
+        .edge(
+            Transition(
+                from_id="order_cancelled",
+                to_id="greeting",
+                when="Customer wants to try ordering again",
+            )
+        )
+        .edge(
+            Transition(
+                from_id="order_cancelled",
+                to_id="session_end",
+                when="Customer wants to leave",
             )
         )
     )
@@ -166,31 +327,15 @@ async def main() -> None:
     # Use OpenAI provider
     provider = OpenAI()
     orch = Orchestrator(
-        agent=spec, provider=provider, tool_runner=runner, node_overrides=node_overrides, verbose=True
+        agent=spec,
+        provider=provider,
+        tool_runner=runner,
+        node_overrides=node_overrides,
+        verbose=True,
     )
     s = await orch.create_session()
 
     print("Welcome to Nomos Barista! Type /quit to exit, /pause, /resume, /cancel.")
-
-    # Start with initial decision at greeting
-    await orch.input(session_id=s.id, inputs={"messages": []})
-
-    # Process initial greeting
-    async for ev in orch.stream(session_id=s.id):
-        t = ev.get("type")
-        if t == EventType.TOKEN_EMITTED.value:
-            print(ev["data"].get("delta"), end="", flush=True)
-        elif t == EventType.DECISION_COMPLETED.value:
-            data = ev.get("data", {})
-            if data.get("action") == "RESPOND":
-                print(f"\n[response] {data.get('response', '')}")
-            else:
-                print(f"\n[decision] {data}")
-            break
-        elif t and t.startswith("tool."):
-            print(f"\n{ev}")
-        elif t == EventType.ROUTING_APPLIED.value:
-            print(f"\n[route] {ev.get('data')}")
 
     while True:
         try:
@@ -224,23 +369,23 @@ async def main() -> None:
                 },
             )
 
-            # Process the response turn
+            # Process the response turn - continue until we get a RESPOND
             async for ev in orch.stream(session_id=s.id):
                 t = ev.get("type")
-                if t == EventType.TOKEN_EMITTED.value:
-                    print(ev["data"].get("delta"), end="", flush=True)
-                elif t == EventType.DECISION_COMPLETED.value:
+                if t == EventType.DECISION_COMPLETED.value:
                     data = ev.get("data", {})
                     if data.get("action") == "RESPOND":
-                        print(f"\n[response] {data.get('response', '')}")
+                        response = data.get("response", "")
+                        print(f"Agent -> {response}")
+                        # Only break on RESPOND - MOVE actions continue processing
+                        break
+                    elif data.get("action") == "MOVE":
+                        # Continue processing for MOVE actions (routing happens automatically)
+                        continue
                     else:
-                        print(f"\n[decision] {data}")
-                    # Decision completed, turn is done
-                    break
-                elif t and t.startswith("tool."):
-                    print(f"\n{ev}")
-                elif t == EventType.ROUTING_APPLIED.value:
-                    print(f"\n[route] {ev.get('data')}")
+                        # Continue for other actions too
+                        continue
+                # Ignore all other events (no debug prints)
         except KeyboardInterrupt:
             break
 

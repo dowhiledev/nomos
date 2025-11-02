@@ -12,7 +12,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional, Union
 import json
 
 from nomos.core.events import EventType, TokenFrame, DecisionFrame
-from nomos.core.schemas import Message
+from nomos.core.schemas import Message, Decision
 from pydantic import BaseModel
 from nomos.core.interfaces import LLMProvider
 from nomos.core.types import ProviderSchema, ProviderFrame
@@ -154,7 +154,31 @@ class OpenAI(LLMProvider):
                 ) from exc
 
         oai_messages = _to_openai_messages(messages)
-        # Start streaming chat completion
+        
+        # Try structured outputs first (non-streaming)
+        try:
+            completion = client.beta.chat.completions.parse(
+                model=self._model,
+                messages=oai_messages,
+                response_format=Decision,
+            )
+            # For structured outputs, we get the parsed object directly
+            decision = completion.choices[0].message.parsed
+            if decision:
+                # Convert Decision model to the expected dict format
+                data = decision.model_dump()
+                yield DecisionFrame(data=data).model_dump()
+            return
+        except (AttributeError, Exception):
+            # Fallback to streaming JSON mode
+            pass
+        
+        # Fallback for streaming JSON mode (legacy behavior)
+        # Aggregate the full text to yield a final decision
+        full_text: List[str] = []
+        tool_calls: Dict[int, Dict[str, Any]] = {}
+        
+        # Start streaming chat completion with JSON mode
         try:
             stream = client.chat.completions.create(
                 model=self._model,
@@ -167,9 +191,7 @@ class OpenAI(LLMProvider):
             stream = client.chat.completions.create(
                 model=self._model, messages=oai_messages, stream=True
             )
-        # Aggregate the full text to yield a final RESPOND decision, or collect tool_call deltas
-        full_text: List[str] = []
-        tool_calls: Dict[int, Dict[str, Any]] = {}
+        
         # The iterator is synchronous; bridge into async context
         for chunk in stream:
             try:
@@ -258,12 +280,13 @@ class OpenAI(LLMProvider):
             yield DecisionFrame(data=data).model_dump()
         else:
             response_text = "".join(full_text)
-            # First try to parse as a structured decision JSON
+            # First try to parse as structured Decision JSON
             try:
                 obj = json.loads(response_text)
-                if isinstance(obj, dict) and obj.get("action"):
-                    yield DecisionFrame(data=obj).model_dump()
-                    return
+                # Validate against Decision schema
+                decision = Decision.model_validate(obj)
+                yield DecisionFrame(data=decision.model_dump()).model_dump()
+                return
             except Exception:
                 pass
             # Fallback: RESPOND action with raw text (optionally attempt schema parse)

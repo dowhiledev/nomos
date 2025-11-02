@@ -55,6 +55,7 @@ Spike 3 — Async LLM Streaming Adapter (OpenAI)
    - OpenAIProvider supports token streaming, RESPOND aggregation, basic tool/function-calling deltas → TOOL_CALL.
    - Content-parts mapping implemented (text, image-url). Error behavior covered via fake/malformed clients. Real client behind optional extra.
    - Typed frame models (TokenFrame, DecisionFrame) defined and used to produce frames.
+   - Structured outputs implemented using Decision schema with beta.chat.completions.parse for reliable parsing; falls back to JSON mode with schema validation.
 
 Spike 4 — Tool Runner 2.0 (Async, Progress, Cancellation)
 - Goals: Async tool contract with progress/partial outputs; budgets/timeouts; safe execution.
@@ -158,7 +159,7 @@ Milestone Grouping & Exit Criteria
   - Exit: At least one fake provider/tool passes contract tests; in‑memory event store usable.
 - M2 Runtime MVP (3,4,5): Provider + Tool runner + Graph compile integrated with actor orchestrator.
   - Exit: Conceptual example runs locally with streaming and a simple tool call.
-  - Status: Completed
+  - Status: Completed (barista example demonstrates full streaming flow with LLM decisions, tool calls, routing, and message accumulation)
 - M3 Transport (6,7): Server endpoints operational (duplex).
   - Exit: curl/web client can create session, stream WS, send inputs and control; e2e demo. SSE endpoint available, automated test optional.
   - Status: In progress
