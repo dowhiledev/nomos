@@ -5,9 +5,10 @@ from __future__ import annotations
 from typing import Dict, Tuple
 
 from nomos.core.schemas import Checkpoint
+from nomos.core.interfaces import CheckpointStore
 
 
-class InMemoryCheckpointStore:
+class InMemoryCheckpointStore(CheckpointStore):
     def __init__(self) -> None:
         self._store: Dict[Tuple[str, str], Checkpoint] = {}
 

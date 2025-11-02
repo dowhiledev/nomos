@@ -1,4 +1,4 @@
-"""Simple tool runner implementing ToolRunnerPort over a registry of callables.
+"""Simple tool runner implementing ToolRunner over a registry of callables.
 
 Tools can be registered via the @runner.tool() decorator, which generates schemas
 and handles event emission automatically.
@@ -14,9 +14,9 @@ from concurrent.futures import ProcessPoolExecutor
 
 from pydantic import BaseModel, create_model
 
-from nomos.core.ports import ToolRunnerPort
+from nomos.core.interfaces import ToolRunner
 from nomos.core.tool_events import validate_tool_frame
-from nomos.core.types import ToolFrameType, ToolArgs
+from nomos.core.types import ToolFrameUnion, ToolArgs
 
 
 ToolCallable = Callable[..., Any]
@@ -83,7 +83,7 @@ def _call_sync(fn: ToolCallable, kwargs: Dict[str, Any]) -> Any:  # noqa: ANN401
     return fn(**kwargs)
 
 
-class SimpleToolRunner(ToolRunnerPort):
+class SimpleToolRunner(ToolRunner):
     def __init__(
         self,
         registry: Dict[str, ToolCallable] | None = None,
@@ -148,7 +148,7 @@ class SimpleToolRunner(ToolRunnerPort):
 
     async def run(
         self, tool_name: str, args: ToolArgs, ctx: Dict[str, Any]
-    ) -> AsyncIterator[ToolFrameType]:
+    ) -> AsyncIterator[ToolFrameUnion]:
         # ACL check
         if self._allowed is not None and tool_name not in self._allowed:
             yield {"type": "tool.error", "tool": tool_name, "error": "unauthorized"}

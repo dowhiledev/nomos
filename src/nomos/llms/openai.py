@@ -1,4 +1,4 @@
-"""OpenAI provider adapter implementing LLMProviderPort (skeleton).
+"""OpenAI provider adapter implementing LLMProvider (skeleton).
 
 This adapter converts Nomos messages (with content parts) to OpenAI chat messages,
 streams token deltas, and yields a final decision.completed with aggregated text.
@@ -14,7 +14,7 @@ import json
 from nomos.core.events import EventType, TokenFrame, DecisionFrame
 from nomos.core.schemas import Message
 from pydantic import BaseModel
-from nomos.core.ports import LLMProviderPort
+from nomos.core.interfaces import LLMProvider
 from nomos.core.types import ProviderSchema, ProviderFrame
 
 
@@ -56,7 +56,7 @@ def _to_openai_messages(
     return oai
 
 
-class OpenAIProvider(LLMProviderPort):
+class OpenAI(LLMProvider):
     def __init__(
         self, *, model: str = "gpt-4o-mini", client: Optional[Any] = None
     ) -> None:  # noqa: ANN401
@@ -212,4 +212,4 @@ class OpenAIProvider(LLMProviderPort):
                 yield frame
 
 
-__all__ = ["OpenAIProvider"]
+__all__ = ["OpenAI"]

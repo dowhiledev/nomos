@@ -7,9 +7,10 @@ from collections import defaultdict
 from typing import AsyncIterator, Dict, List
 
 from nomos.core.events import SessionEvent
+from nomos.core.interfaces import EventStore
 
 
-class InMemoryEventStore:
+class InMemoryEventStore(EventStore):
     def __init__(self) -> None:
         self._events: Dict[str, List[SessionEvent]] = defaultdict(list)
         self._queues: Dict[str, asyncio.Queue[SessionEvent]] = defaultdict(

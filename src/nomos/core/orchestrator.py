@@ -24,7 +24,7 @@ from nomos.graph.prompt import edge_conditions_for_prompt
 from .state import SessionState
 from .store.memory import InMemoryEventStore
 from .store.checkpoint_memory import InMemoryCheckpointStore
-from .ports import LLMProviderPort, ToolRunnerPort
+from .interfaces import LLMProvider, ToolRunner
 from .observe import inc, span, measure
 from .redaction import redact_mapping
 from .schemas import SessionInput, ControlCommand
@@ -41,8 +41,8 @@ class Orchestrator:
         agent: Any,  # noqa: ANN401
         *,
         store: Optional[InMemoryEventStore] = None,
-        provider: Optional[LLMProviderPort] = None,
-        tool_runner: Optional[ToolRunnerPort] = None,
+        provider: Optional[LLMProvider] = None,
+        tool_runner: Optional[ToolRunner] = None,
         checkpoint_store: Optional[InMemoryCheckpointStore] = None,
         redact: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
         node_overrides: Optional[Dict[str, Dict[str, Any]]] = None,

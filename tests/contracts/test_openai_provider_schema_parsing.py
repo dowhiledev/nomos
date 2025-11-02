@@ -2,7 +2,7 @@ import types
 import pytest
 from pydantic import BaseModel
 
-from nomos.llms.openai_provider import OpenAIProvider
+from nomos.llms.openai import OpenAI
 
 
 class _Chunk:
@@ -36,7 +36,7 @@ class FooSchema(BaseModel):
 
 @pytest.mark.asyncio
 async def test_openai_provider_parses_schema_for_respond():
-    provider = OpenAIProvider(client=FakeTextClient())
+    provider = OpenAI(client=FakeTextClient())
     frames = []
     async for f in provider.stream_decision(
         [{"role": "user", "content": [{"type": "text", "data": "hi"}]}],
@@ -92,7 +92,7 @@ class SearchArgs(BaseModel):
 
 @pytest.mark.asyncio
 async def test_openai_provider_parses_tool_kwargs_schema():
-    provider = OpenAIProvider(client=FakeToolClient())
+    provider = OpenAI(client=FakeToolClient())
     schema = {"web.search": SearchArgs}
     frames = []
     async for f in provider.stream_decision(

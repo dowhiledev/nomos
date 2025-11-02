@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Optional, TypeAlias, Union
-from typing_extensions import TypedDict
 
 from pydantic import BaseModel
 
@@ -15,29 +14,29 @@ ProviderSchema: TypeAlias = Optional[Union[type[BaseModel], Dict[str, type[BaseM
 # Frames emitted by providers (transition: dict allowed for adapter compatibility)
 ProviderFrame: TypeAlias = Union[DecisionFrame, TokenFrame, Dict[str, Any]]
 
-# Frames emitted by tools (transition: dict allowed)
-ToolFrameType: TypeAlias = Union[ToolFrame, Dict[str, Any]]
+# Frames emitted by tools (supports dict for compatibility)
+ToolFrameUnion: TypeAlias = Union[ToolFrame, Dict[str, Any]]
 
 # Tool arguments passed to tool runners
 ToolArgs: TypeAlias = Dict[str, Any]
 
 
-class ToolContext(TypedDict, total=False):
+class ToolContext(BaseModel):
     """Context passed to tools by the runner.
 
-    Keys are optional; tools should test for presence.
+    All fields are optional; tools should test for presence.
     """
 
-    cancel_event: Any
+    cancel_event: Optional[Any] = None
     session_id: str
-    node_id: Optional[str]
-    memory: Optional[str]
+    node_id: Optional[str] = None
+    memory: Optional[str] = None
 
 
 __all__ = [
     "ProviderSchema",
     "ProviderFrame",
-    "ToolFrameType",
+    "ToolFrameUnion",
     "ToolArgs",
     "ToolContext",
 ]

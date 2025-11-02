@@ -8,9 +8,10 @@ from __future__ import annotations
 
 
 from nomos.core.schemas import Checkpoint
+from nomos.core.interfaces import CheckpointStore
 
 
-class PostgresCheckpointStore:
+class PostgresCheckpointStore(CheckpointStore):
     def __init__(self, dsn: str) -> None:
         try:
             from importlib import import_module

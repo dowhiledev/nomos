@@ -1,7 +1,7 @@
 import types
 import pytest
 
-from nomos.llms.openai_provider import OpenAIProvider
+from nomos.llms.openai import OpenAI
 
 
 class _Delta:
@@ -44,7 +44,7 @@ class FakeOpenAIClientMalformed:
 
 @pytest.mark.asyncio
 async def test_openai_provider_tool_call_malformed_args_raw_fallback():
-    provider = OpenAIProvider(model="gpt-4o-mini", client=FakeOpenAIClientMalformed())
+    provider = OpenAI(model="gpt-4o-mini", client=FakeOpenAIClientMalformed())
     frames = []
     async for f in provider.stream_decision(
         [{"role": "user", "content": [{"type": "text", "data": "hi"}]}], schema=None

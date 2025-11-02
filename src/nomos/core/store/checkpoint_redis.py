@@ -8,9 +8,10 @@ from __future__ import annotations
 
 
 from nomos.core.schemas import Checkpoint
+from nomos.core.interfaces import CheckpointStore
 
 
-class RedisCheckpointStore:
+class RedisCheckpointStore(CheckpointStore):
     def __init__(
         self, *, url: str = "redis://localhost/0", prefix: str = "nomos:cp:"
     ) -> None:

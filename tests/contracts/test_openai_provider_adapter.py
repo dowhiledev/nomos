@@ -2,7 +2,7 @@ import types
 
 import pytest
 
-from nomos.llms.openai_provider import OpenAIProvider
+from nomos.llms.openai import OpenAI
 from nomos.core.events import EventType
 from nomos.core.schemas import Message, TextPart
 
@@ -34,7 +34,7 @@ class FakeOpenAIClient:
 
 @pytest.mark.asyncio
 async def test_openai_provider_stream_decision_with_fake_client():
-    provider = OpenAIProvider(model="gpt-4o-mini", client=FakeOpenAIClient())
+    provider = OpenAI(model="gpt-4o-mini", client=FakeOpenAIClient())
     messages = [Message(role="user", content=[TextPart(type="text", data="hi")])]
     frames = []
     async for f in provider.stream_decision(messages, schema=None):

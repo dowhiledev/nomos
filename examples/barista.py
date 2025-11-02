@@ -13,7 +13,7 @@ from nomos.core import Orchestrator
 from nomos.core.events import EventType
 from nomos.graph import Graph, LLMNode, Edge
 from nomos.tools.runner import SimpleToolRunner
-from nomos.llms.openai_provider import OpenAIProvider
+from nomos.llms.openai import OpenAI
 
 # Load environment variables
 load_dotenv()
@@ -159,7 +159,7 @@ async def main() -> None:
             node_overrides[node.id] = {"allowed_tools": allowed}
 
     # Use OpenAI provider
-    provider = OpenAIProvider()
+    provider = OpenAI()
     orch = Orchestrator(
         agent=spec, provider=provider, tool_runner=runner, node_overrides=node_overrides
     )

@@ -1,7 +1,7 @@
 import types
 import pytest
 
-from nomos.llms.openai_provider import OpenAIProvider
+from nomos.llms.openai import OpenAI
 from nomos.core.events import EventType
 
 
@@ -39,7 +39,7 @@ class CapturingClient:
 @pytest.mark.asyncio
 async def test_openai_provider_maps_content_parts():
     client = CapturingClient()
-    provider = OpenAIProvider(client=client)
+    provider = OpenAI(client=client)
     messages = [
         {
             "role": "user",
