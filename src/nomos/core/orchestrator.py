@@ -109,7 +109,7 @@ def _format_decision(decision_data: Dict[str, Any]) -> Panel:
         content.append("Response: ", style="bold")
         content.append(f"{response_preview}", style="green")
 
-    return Panel(content, title="🤖 Decision", border_style=color)
+    return Panel(content, title="🤖 Decision", border_style=color, expand=False)
 
 
 def _format_routing(from_node: str, to_node: str, condition: str = "") -> Panel:
@@ -131,7 +131,7 @@ def _format_tool_execution(tool_name: str, tool_kwargs: Dict[str, Any]) -> Panel
     content.append(f"{tool_name}\n", style="cyan")
     content.append(f"Args: {tool_kwargs}", style="dim")
 
-    return Panel(content, title="🔧 Tool Call", border_style="yellow")
+    return Panel(content, title="🔧 Tool Call", border_style="yellow", expand=False)
 
 
 class Orchestrator:
