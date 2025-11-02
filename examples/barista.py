@@ -5,7 +5,7 @@ It uses a graph-based workflow with OpenAI for natural language understanding.
 """
 
 import asyncio
-from typing import Any, Dict, Literal, Optional
+from typing import Literal, Optional
 import uuid
 
 from dotenv import load_dotenv
@@ -154,175 +154,139 @@ async def finalize_order(
 
 async def main() -> None:
     # Define the graph
-    g = (
-        Graph(name="barista")
-        .add(
-            Step(
-                id="greeting",
-                prompt=(
-                    "Greet the customer warmly and ask how you can help them today. "
-                    "Use the `get.options` tool to get familiar with available options. "
-                    "If the customer mentions a specific coffee preference, check if it's available. "
-                    "When the customer is ready to order, transition to the ordering flow."
-                ),
-                tools=["get.options"],
+    g = Graph(name="barista").add(
+        # Steps
+        Step(
+            id="greeting",
+            prompt=(
+                "Greet the customer warmly and ask how you can help them today. "
+                "Use the `get.options` tool to get familiar with available options. "
+                "If the customer mentions a specific coffee preference, check if it's available. "
+                "When the customer is ready to order, transition to the ordering flow."
             ),
-            Step(
-                id="order_entry",
-                prompt=(
-                    "Help the customer build their order step by step. "
-                    "Ask for their coffee preference and size. "
-                    "Use `get.options` to check availability. "
-                    "Use `add.to.cart` to add items when customer confirms their choice. "
-                    "Use `remove_item` if they want to modify their order. "
-                    "Use `clear.cart` if they want to start over. "
-                    "When they're ready to review and finalize, move to checkout flow."
-                ),
-                tools=["get.options", "add.to.cart", "clear.cart", "remove.item"],
+            tools=["get.options"],
+        ),
+        Step(
+            id="order_entry",
+            prompt=(
+                "Help the customer build their order step by step. "
+                "Ask for their coffee preference and size. "
+                "Use `get.options` to check availability. "
+                "Use `add.to.cart` to add items when customer confirms their choice. "
+                "Use `remove_item` if they want to modify their order. "
+                "Use `clear.cart` if they want to start over. "
+                "When they're ready to review and finalize, move to checkout flow."
             ),
-            Step(
-                id="order_review",
-                prompt=(
-                    "Review the customer's complete order using `get.summary`. "
-                    "Present the total price clearly and confirm all items. "
-                    "If customer wants to modify the order, return to order entry. "
-                    "When customer confirms, proceed to payment processing."
-                ),
-                tools=["get.summary"],
+            tools=["get.options", "add.to.cart", "clear.cart", "remove.item"],
+        ),
+        Step(
+            id="order_review",
+            prompt=(
+                "Review the customer's complete order using `get.summary`. "
+                "Present the total price clearly and confirm all items. "
+                "If customer wants to modify the order, return to order entry. "
+                "When customer confirms, proceed to payment processing."
             ),
-            Step(
-                id="payment_processing",
-                prompt=(
-                    "Process the customer's payment. Ask for their preferred payment method (Card or Cash). "
-                    "If paying with cash, ask for the payment amount. "
-                    "Use `finalize.order` tool to complete the transaction. "
-                    "Provide receipt and thank the customer."
-                ),
-                tools=["finalize.order"],
+            tools=["get.summary"],
+        ),
+        Step(
+            id="payment_processing",
+            prompt=(
+                "Process the customer's payment. Ask for their preferred payment method (Card or Cash). "
+                "If paying with cash, ask for the payment amount. "
+                "Use `finalize.order` tool to complete the transaction. "
+                "Provide receipt and thank the customer."
             ),
-            Step(
-                id="order_completed",
-                prompt=(
-                    "Confirm the order is complete and provide order details. "
-                    "Thank the customer and ask if they need anything else. "
-                    "If they want to place another order, return to greeting."
-                ),
+            tools=["finalize.order"],
+        ),
+        Step(
+            id="order_completed",
+            prompt=(
+                "Confirm the order is complete and provide order details. "
+                "Thank the customer and ask if they need anything else. "
+                "If they want to place another order, return to greeting."
             ),
-            Step(
-                id="order_cancelled",
-                prompt=(
-                    "Handle order cancellation gracefully. Use `clear.cart` to remove all items. "
-                    "Apologize for any inconvenience and ask if they'd like to try again later."
-                ),
-                tools=["clear.cart"],
+        ),
+        Step(
+            id="order_cancelled",
+            prompt=(
+                "Handle order cancellation gracefully. Use `clear.cart` to remove all items. "
+                "Apologize for any inconvenience and ask if they'd like to try again later."
             ),
-            Step(
-                id="session_end",
-                prompt=(
-                    "End the session gracefully. Thank the customer for visiting and wish them well. "
-                    "Clear any remaining cart items for cleanup."
-                ),
-                tools=["clear.cart"],
+            tools=["clear.cart"],
+        ),
+        Step(
+            id="session_end",
+            prompt=(
+                "End the session gracefully. Thank the customer for visiting and wish them well. "
+                "Clear any remaining cart items for cleanup."
             ),
-        )
-        .edge(
-            Transition(
-                from_id="greeting",
-                to_id="order_entry",
-                when="Customer is ready to place an order or wants to browse menu",
-            )
-        )
-        .edge(
-            Transition(
-                from_id="order_entry",
-                to_id="order_review",
-                when="CCustomer wants to review their order or proceed to checkout",
-            )
-        )
-        .edge(
-            Transition(
-                from_id="order_entry",
-                to_id="greeting",
-                when="Customer wants to cancel the order completely",
-            )
-        )
-        .edge(
-            Transition(
-                from_id="order_review",
-                to_id="order_entry",
-                when="Customer wants to modify their order or add more items",
-            )
-        )
-        .edge(
-            Transition(
-                from_id="order_review",
-                to_id="payment_processing",
-                when="Customer confirms the order and wants to proceed with payment",
-            )
-        )
-        .edge(
-            Transition(
-                from_id="order_review",
-                to_id="order_cancelled",
-                when="Customer wants to cancel the order",
-            )
-        )
-        .edge(
-            Transition(
-                from_id="payment_processing",
-                to_id="order_completed",
-                when="Payment processed successfully",
-            )
-        )
-        .edge(
-            Transition(
-                from_id="payment_processing",
-                to_id="order_review",
-                when="Payment fails or customer wants to review order again",
-            )
-        )
-        .edge(
-            Transition(
-                from_id="order_completed",
-                to_id="session_end",
-                when="Customer is done and wants to leave",
-            )
-        )
-        .edge(
-            Transition(
-                from_id="order_completed",
-                to_id="greeting",
-                when="Customer wants to place another order",
-            )
-        )
-        .edge(
-            Transition(
-                from_id="order_cancelled",
-                to_id="greeting",
-                when="Customer wants to try ordering again",
-            )
-        )
-        .edge(
-            Transition(
-                from_id="order_cancelled",
-                to_id="session_end",
-                when="Customer wants to leave",
-            )
-        )
+            tools=["clear.cart"],
+        ),
+        # Transitions
+        Transition(
+            from_id="greeting",
+            to_id="order_entry",
+            when="Customer is ready to place an order or wants to browse menu",
+        ),
+        Transition(
+            from_id="order_entry",
+            to_id="order_review",
+            when="Customer wants to review their order or proceed to checkout",
+        ),
+        Transition(
+            from_id="order_entry",
+            to_id="greeting",
+            when="Customer wants to cancel the order completely",
+        ),
+        Transition(
+            from_id="order_review",
+            to_id="order_entry",
+            when="Customer wants to modify their order or add more items",
+        ),
+        Transition(
+            from_id="order_review",
+            to_id="payment_processing",
+            when="Customer confirms the order and wants to proceed with payment",
+        ),
+        Transition(
+            from_id="order_review",
+            to_id="order_cancelled",
+            when="Customer wants to cancel the order",
+        ),
+        Transition(
+            from_id="payment_processing",
+            to_id="order_completed",
+            when="Payment processed successfully",
+        ),
+        Transition(
+            from_id="payment_processing",
+            to_id="order_review",
+            when="Payment fails or customer wants to review order again",
+        ),
+        Transition(
+            from_id="order_completed",
+            to_id="session_end",
+            when="Customer is done and wants to leave",
+        ),
+        Transition(
+            from_id="order_completed",
+            to_id="greeting",
+            when="Customer wants to place another order",
+        ),
+        Transition(
+            from_id="order_cancelled",
+            to_id="greeting",
+            when="Customer wants to try ordering again",
+        ),
+        Transition(
+            from_id="order_cancelled",
+            to_id="session_end",
+            when="Customer wants to leave",
+        ),
     )
 
     spec = g.compile()
-
-    # Node overrides for allowed tools
-    node_overrides: Dict[str, Dict[str, Any]] = {}
-    for node in g._nodes:
-        allowed = {
-            t
-            for t in (node.tools or [])
-            if isinstance(t, str) and t in runner._registry
-        }
-        if allowed:
-            node_overrides[node.id] = {"allowed_tools": allowed}
 
     # Use OpenAI provider
     provider = OpenAI()
@@ -330,7 +294,6 @@ async def main() -> None:
         agent=spec,
         provider=provider,
         tool_runner=runner,
-        node_overrides=node_overrides,
         verbose=True,
     )
     s = await orch.create_session()

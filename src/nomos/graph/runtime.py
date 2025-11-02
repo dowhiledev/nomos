@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from pydantic import BaseModel
 from pydantic.config import ConfigDict
@@ -32,11 +32,20 @@ class Graph(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def add(self, *nodes: Step) -> "Graph":
-        for n in nodes:
-            if self._start is None:
-                self._start = n.id
-            self._nodes.append(n)
+    def node(self, step: Step) -> "Graph":
+        if self._start is None:
+            self._start = step.id
+        self._nodes.append(step)
+        return self
+
+    def add(self, *items: Union[Step, Transition]) -> "Graph":
+        for item in items:
+            if isinstance(item, Step):
+                if self._start is None:
+                    self._start = item.id
+                self._nodes.append(item)
+            elif isinstance(item, Transition):
+                self._edges.append(item)
         return self
 
     def edge(self, e: Transition) -> "Graph":
@@ -49,7 +58,9 @@ class Graph(BaseModel):
         spec = AgentSpec(
             name=self.name,
             start=self._start,
-            nodes=[NodeSpec(id=n.id, prompt=n.prompt) for n in self._nodes],
+            nodes=[
+                NodeSpec(id=n.id, prompt=n.prompt, tools=n.tools) for n in self._nodes
+            ],
             edges=[
                 EdgeSpec(from_id=e.from_id, to_id=e.to_id, condition=e.when)
                 for e in self._edges

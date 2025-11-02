@@ -234,7 +234,10 @@ class Orchestrator:
         assert isinstance(inputs, SessionInput)
         # Accumulate messages
         self._messages.setdefault(session_id, []).extend(
-            [msg.model_dump() if hasattr(msg, "model_dump") else msg for msg in inputs.messages]
+            [
+                msg.model_dump() if hasattr(msg, "model_dump") else msg
+                for msg in inputs.messages
+            ]
         )
         await self._append(
             session_id,
@@ -304,7 +307,14 @@ class Orchestrator:
                 eff_tool_runner = (
                     ov.get("tool_runner", self._tool_runner) or self._tool_runner
                 )
+                # Get tools from node overrides, or fall back to node spec
                 allowed_tools = ov.get("allowed_tools")
+                if (
+                    allowed_tools is None
+                    and isinstance(self._agent, AgentSpec)
+                    and current_node_id
+                ):
+                    allowed_tools = self._agent.get_node_tools(current_node_id)
 
                 # Agent loop: continue making decisions within this input until RESPOND or max turns
                 turns = 0
@@ -317,7 +327,9 @@ class Orchestrator:
                     current_node_id = self._current_node.get(session_id)
 
                     if self._verbose:
-                        _console.rule(f"[bold yellow]Node: {current_node_id}[/bold yellow]")
+                        _console.rule(
+                            f"[bold yellow]Node: {current_node_id}[/bold yellow]"
+                        )
 
                     with (
                         span("provider.stream_decision"),
@@ -424,7 +436,7 @@ class Orchestrator:
                                 response = data.get("response", "")
                                 assistant_msg = {
                                     "role": "assistant",
-                                    "content": [{"type": "text", "data": response}]
+                                    "content": [{"type": "text", "data": response}],
                                 }
                                 messages_base.append(assistant_msg)
                                 self._messages[session_id].append(assistant_msg)
@@ -538,7 +550,9 @@ class Orchestrator:
                                                 ],
                                             }
                                         )
-                                        self._messages[session_id].append(messages_base[-1])
+                                        self._messages[session_id].append(
+                                            messages_base[-1]
+                                        )
                             # Handle routing (MOVE) only on decision frame
                             if isinstance(self._agent, AgentSpec) and action == "MOVE":
                                 to_id = self._agent.route(
@@ -576,7 +590,9 @@ class Orchestrator:
                                     self._current_node[session_id] = to_id
                             # End after one decision turn per input
                         # End after one decision turn per input (multi-turn handled by client or future loop)
-                        if decision_data and decision_data.get("action") in ("RESPOND",):
+                        if decision_data and decision_data.get("action") in (
+                            "RESPOND",
+                        ):
                             done = True
                     if done:
                         break

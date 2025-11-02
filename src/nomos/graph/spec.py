@@ -13,6 +13,7 @@ from pydantic import BaseModel
 class NodeSpec(BaseModel):
     id: str
     prompt: Optional[str] = None
+    tools: Optional[List[str]] = None
 
 
 class EdgeSpec(BaseModel):
@@ -29,6 +30,13 @@ class AgentSpec(BaseModel):
 
     def allowed_targets(self, current: str) -> List[str]:
         return [e.to_id for e in self.edges if e.from_id == current]
+
+    def get_node_tools(self, node_id: str) -> List[str]:
+        """Get tools for a specific node."""
+        for node in self.nodes:
+            if node.id == node_id:
+                return node.tools or []
+        return []
 
     def route(self, current: str, decision: dict) -> Optional[str]:  # noqa: ANN001
         # Runtime routes solely based on the decision-provided step_id

@@ -222,7 +222,12 @@ async def main() -> None:
         session_id=s.id,
         inputs={
             "messages": [
-                {"role": "user", "content": [{"type": "text", "data": "I would like to order an espresso"}]}
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "data": "I would like to order an espresso"}
+                    ],
+                }
             ]
         },
     )

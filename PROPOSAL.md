@@ -26,7 +26,7 @@
 
 ### Key Differences
 1. **Structured Outputs**: Uses `client.beta.chat.completions.parse()` with Pydantic models for decisions.
-2. **Decision Model**: 
+2. **Decision Model**:
    ```python
    class Decision(BaseModel):
        reasoning: List[str]

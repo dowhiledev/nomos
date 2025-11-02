@@ -154,7 +154,7 @@ class OpenAI(LLMProvider):
                 ) from exc
 
         oai_messages = _to_openai_messages(messages)
-        
+
         # Try structured outputs first (non-streaming)
         try:
             completion = client.beta.chat.completions.parse(
@@ -172,12 +172,12 @@ class OpenAI(LLMProvider):
         except (AttributeError, Exception):
             # Fallback to streaming JSON mode
             pass
-        
+
         # Fallback for streaming JSON mode (legacy behavior)
         # Aggregate the full text to yield a final decision
         full_text: List[str] = []
         tool_calls: Dict[int, Dict[str, Any]] = {}
-        
+
         # Start streaming chat completion with JSON mode
         try:
             stream = client.chat.completions.create(
@@ -191,7 +191,7 @@ class OpenAI(LLMProvider):
             stream = client.chat.completions.create(
                 model=self._model, messages=oai_messages, stream=True
             )
-        
+
         # The iterator is synchronous; bridge into async context
         for chunk in stream:
             try:
@@ -264,7 +264,7 @@ class OpenAI(LLMProvider):
                 tool_kwargs = json.loads(raw_args) if raw_args else {}
             except Exception:
                 tool_kwargs = {"__raw__": raw_args}
-            data: Dict[str, Any] = {
+            tool_data: Dict[str, Any] = {
                 "action": "TOOL_CALL",
                 "tool_call": {"tool_name": tool_name, "tool_kwargs": tool_kwargs},
             }
@@ -274,10 +274,12 @@ class OpenAI(LLMProvider):
                 try:
                     if isinstance(model, type) and issubclass(model, BaseModel):
                         parsed = model.model_validate(tool_kwargs)
-                        data["tool_call"]["tool_kwargs_parsed"] = parsed.model_dump()
+                        tool_data["tool_call"]["tool_kwargs_parsed"] = (
+                            parsed.model_dump()
+                        )
                 except Exception as exc:  # pragma: no cover
-                    data.setdefault("schema_error", str(exc))
-            yield DecisionFrame(data=data).model_dump()
+                    tool_data.setdefault("schema_error", str(exc))
+            yield DecisionFrame(data=tool_data).model_dump()
         else:
             response_text = "".join(full_text)
             # First try to parse as structured Decision JSON
