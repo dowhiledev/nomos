@@ -82,6 +82,7 @@ class ControlCommand(BaseModel):
 
 
 class Decision(BaseModel):
+    reasoning: List[str]
     action: Literal["RESPOND", "TOOL_CALL", "MOVE"]
     response: Optional[str] = None
     tool_call: Optional[ToolCall] = None

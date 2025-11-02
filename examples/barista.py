@@ -80,7 +80,7 @@ async def main() -> None:
         .add(
             Step(
                 id="greeting",
-                prompt="Greet the customer warmly and ask how you can help them today. Use the get.options tool to get familiar with available options.",
+                prompt="Determine if the customer wants to place an order. If they do, transition to order_entry. Otherwise, greet them and ask how to help.",
                 tools=["get.options"],
             ),
             Step(

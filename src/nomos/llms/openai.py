@@ -104,10 +104,12 @@ class OpenAI(LLMProvider):
                 "type": "text",
                 "data": (
                     "You are an agent deciding the next step or tool call based on the current node.\n"
-                    "Output strictly one JSON object with a single decision. Valid shapes:\n"
-                    '- MOVE: {"action":"MOVE","step_id":<one of allowed targets>}\n'
-                    '- TOOL_CALL: {"action":"TOOL_CALL","tool_call":{"tool_name":<name>,"tool_kwargs":{...}}}\n'
-                    '- RESPOND: {"action":"RESPOND","response":<text>}\n'
+                    "Output strictly one JSON object with reasoning and decision. Valid shapes:\n"
+                    '- MOVE: {"reasoning": ["step1", "step2"], "action":"MOVE","step_id":<one of allowed targets>}\n'
+                    '- TOOL_CALL: {"reasoning": ["step1"], "action":"TOOL_CALL","tool_call":{"tool_name":<name>,"tool_kwargs":{...}}}\n'
+                    '- RESPOND: {"reasoning": ["step1"], "action":"RESPOND","response":<text>}\n'
+                    "Decide the next action based on the current instructions, available routes, and conversation history.\n"
+                    "If a route condition is satisfied, use MOVE. Otherwise, use TOOL_CALL or RESPOND as appropriate.\n"
                     "No commentary, no markdown, no code fences."
                 ),
             }
