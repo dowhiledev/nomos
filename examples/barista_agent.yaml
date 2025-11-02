@@ -14,9 +14,9 @@ entry_point: greeting
 steps:
   greeting:
     prompt: |
-      Greet the customer warmly and ask how you can help them today. 
-      Use the `get.options` tool to get familiar with available options. 
-      If the customer mentions a specific coffee preference, check if it's available. 
+      Greet the customer warmly and ask how you can help them today.
+      Use the `get.options` tool to get familiar with available options.
+      If the customer mentions a specific coffee preference, check if it's available.
       When the customer is ready to order, transition to the ordering flow.
     tools:
       - get.options
@@ -26,12 +26,12 @@ steps:
 
   order_entry:
     prompt: |
-      Help the customer build their order step by step. 
-      Ask for their coffee preference and size. 
-      Use `get.options` to check availability. 
-      Use `add.to.cart` to add items when customer confirms their choice. 
-      Use `remove_item` if they want to modify their order. 
-      Use `clear.cart` if they want to start over. 
+      Help the customer build their order step by step.
+      Ask for their coffee preference and size.
+      Use `get.options` to check availability.
+      Use `add.to.cart` to add items when customer confirms their choice.
+      Use `remove_item` if they want to modify their order.
+      Use `clear.cart` if they want to start over.
       When they're ready to review and finalize, move to checkout flow.
     tools:
       - get.options
@@ -46,9 +46,9 @@ steps:
 
   order_review:
     prompt: |
-      Review the customer's complete order using `get.summary`. 
-      Present the total price clearly and confirm all items. 
-      If customer wants to modify the order, return to order entry. 
+      Review the customer's complete order using `get.summary`.
+      Present the total price clearly and confirm all items.
+      If customer wants to modify the order, return to order entry.
       When customer confirms, proceed to payment processing.
     tools:
       - get.summary
@@ -62,9 +62,9 @@ steps:
 
   payment_processing:
     prompt: |
-      Process the customer's payment. Ask for their preferred payment method (Card or Cash). 
-      If paying with cash, ask for the payment amount. 
-      Use `finalize.order` tool to complete the transaction. 
+      Process the customer's payment. Ask for their preferred payment method (Card or Cash).
+      If paying with cash, ask for the payment amount.
+      Use `finalize.order` tool to complete the transaction.
       Provide receipt and thank the customer.
     tools:
       - finalize.order
@@ -76,8 +76,8 @@ steps:
 
   order_completed:
     prompt: |
-      Confirm the order is complete and provide order details. 
-      Thank the customer and ask if they need anything else. 
+      Confirm the order is complete and provide order details.
+      Thank the customer and ask if they need anything else.
       If they want to place another order, return to greeting.
     transitions:
       - to: session_end
@@ -87,7 +87,7 @@ steps:
 
   order_cancelled:
     prompt: |
-      Handle order cancellation gracefully. Use `clear.cart` to remove all items. 
+      Handle order cancellation gracefully. Use `clear.cart` to remove all items.
       Apologize for any inconvenience and ask if they'd like to try again later.
     tools:
       - clear.cart
@@ -99,7 +99,7 @@ steps:
 
   session_end:
     prompt: |
-      End the session gracefully. Thank the customer for visiting and wish them well. 
+      End the session gracefully. Thank the customer for visiting and wish them well.
       Clear any remaining cart items for cleanup.
     tools:
       - clear.cart

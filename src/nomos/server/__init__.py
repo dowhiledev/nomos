@@ -82,16 +82,16 @@ def create_app(
                 except Exception:
                     return True
 
-            existing = [ev for ev in existing if _after(ev.get("event_id"))]
+            existing = [ev for ev in existing if _after(ev.event_id)]
         for event in existing:
-            if ev_id := event.get("event_id"):
+            if ev_id := event.event_id:
                 yield f"id: {ev_id}\n"
-            yield f"data: {json.dumps(event.model_dump())}\n\n"  # type: ignore
+            yield f"data: {json.dumps(event.model_dump())}\n\n"
         # Then stream new events
         async for ev in orch.stream(session_id=sid):
-            if ev_id := ev.get("event_id"):
+            if ev_id := ev.event_id:
                 yield f"id: {ev_id}\n"
-            yield f"data: {json.dumps(ev)}\n\n"
+            yield f"data: {json.dumps(ev.model_dump())}\n\n"
 
     @app.get("/v2/sessions/{sid}/events")
     async def sse(sid: str, request: Request) -> StreamingResponse:  # noqa: ANN401
@@ -109,7 +109,7 @@ def create_app(
 
         async def send_events() -> None:
             async for ev in orch.stream(session_id=sid):
-                await ws.send_text(json.dumps(ev))
+                await ws.send_text(json.dumps(ev.model_dump()))
 
         sender = asyncio.create_task(send_events())
         try:

@@ -307,7 +307,7 @@ class OpenAI(LLMProvider):
     ) -> AsyncIterator[ProviderFrame]:
         # Implement in terms of stream_decision and pass through token events only
         async for frame in self.stream_decision(messages, schema=None):  # type: ignore[arg-type]
-            if frame.get("type") == EventType.TOKEN_EMITTED.value:
+            if frame.get("type") == EventType.TOKEN_EMITTED:
                 yield frame
 
 

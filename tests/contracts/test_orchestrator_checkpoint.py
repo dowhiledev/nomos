@@ -24,7 +24,7 @@ async def test_checkpoint_control_creates_checkpoint_event():
     async def consume():
         nonlocal got
         async for ev in orch.stream(session_id=session.id):
-            if ev["type"] == "checkpoint.created" and ev["data"]["id"] == "cpX":
+            if ev.type == "checkpoint.created" and ev.data["id"] == "cpX":
                 got = True
                 return
 

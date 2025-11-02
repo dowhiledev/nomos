@@ -42,5 +42,5 @@ async def test_llm_provider_contract():
         [{"role": "user", "content": [{"type": "text", "data": "hi"}]}], schema=None
     ):
         frames.append(frame)
-    assert frames[-1]["type"] == EventType.DECISION_COMPLETED.value
-    assert frames[0]["type"] == EventType.TOKEN_EMITTED.value
+    assert frames[-1]["type"] == EventType.DECISION_COMPLETED
+    assert frames[0]["type"] == EventType.TOKEN_EMITTED

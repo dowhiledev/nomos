@@ -33,7 +33,7 @@ async def test_restore_and_continue_flow():
                 ]
             },
         ):
-            if ev["type"] == EventType.DECISION_COMPLETED.value:
+            if ev.type == EventType.DECISION_COMPLETED:
                 return
 
     await consume_first()
@@ -59,7 +59,7 @@ async def test_restore_and_continue_flow():
                 ]
             },
         ):
-            if ev["type"] == EventType.DECISION_COMPLETED.value:
+            if ev.type == EventType.DECISION_COMPLETED:
                 completed = True
                 return
 

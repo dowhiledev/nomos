@@ -35,8 +35,8 @@ async def test_pause_and_resume_blocks_and_resumes_tokens():
     async def consume():
         nonlocal paused, resumed
         async for ev in orch.stream(session_id=session.id, inputs=inputs):
-            if ev["type"] == EventType.TOKEN_EMITTED.value:
-                tokens.append(ev["data"]["delta"])
+            if ev.type == EventType.TOKEN_EMITTED:
+                tokens.append(ev.data["delta"])
                 if len(tokens) == 1 and not paused:
                     await orch.control(
                         session_id=session.id, command={"type": "pause.requested"}
@@ -51,7 +51,7 @@ async def test_pause_and_resume_blocks_and_resumes_tokens():
                     resumed = True
                     # After resume, more tokens should arrive later; ensure count unchanged immediately
                     assert len(tokens) == current_count
-            if ev["type"] == EventType.DECISION_COMPLETED.value:
+            if ev.type == EventType.DECISION_COMPLETED:
                 return
 
     await consume()

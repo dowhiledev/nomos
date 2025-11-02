@@ -52,7 +52,7 @@ async def test_openai_provider_maps_content_parts():
     frames = []
     async for f in provider.stream_decision(messages, schema=None):
         frames.append(f)
-    assert any(fr["type"] == EventType.TOKEN_EMITTED.value for fr in frames)
+    assert any(fr["type"] == EventType.TOKEN_EMITTED for fr in frames)
     # verify mapped message shape used for OpenAI call
     assert isinstance(client.captured_messages, list)
     content = client.captured_messages[0]["content"]

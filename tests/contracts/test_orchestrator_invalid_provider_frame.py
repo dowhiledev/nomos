@@ -26,7 +26,7 @@ async def test_orchestrator_handles_invalid_provider_frame():
                 ]
             },
         ):
-            if ev["type"] == EventType.ERROR_OCCURRED.value:
+            if ev.type == EventType.ERROR_OCCURRED:
                 saw_error = True
                 return
 

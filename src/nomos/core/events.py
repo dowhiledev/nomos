@@ -25,13 +25,24 @@ class EventType(str, Enum):
     CHECKPOINT_CREATED = "checkpoint.created"
     CHECKPOINT_RESTORED = "checkpoint.restored"
     ERROR_OCCURRED = "error.occurred"
+    # Tool execution frames
+    TOOL_STARTED = "tool.started"
+    TOOL_PROGRESS = "tool.progress"
+    TOOL_STDOUT = "tool.stdout"
+    TOOL_COMPLETED = "tool.completed"
+    TOOL_ERROR = "tool.error"
 
 
 class SessionEvent(BaseModel):
-    """Canonical session event (append-only)."""
+    """Canonical session event (append-only).
+
+    All event types are defined in the EventType enum, including:
+    - Core orchestration events (SESSION_CREATED, DECISION_COMPLETED, etc.)
+    - Tool execution frames (TOOL_STARTED, TOOL_PROGRESS, TOOL_COMPLETED, TOOL_ERROR)
+    """
 
     session_id: str
-    type: str
+    type: EventType
     data: Dict[str, Any] = Field(default_factory=dict)
     node_id: Optional[str] = None
     event_id: Optional[str] = None

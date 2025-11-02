@@ -35,15 +35,15 @@ async def test_cancel_mid_tokens():
 
     async def consume():
         async for ev in orch.stream(session_id=session.id, inputs=inputs):
-            if ev["type"] == EventType.TOKEN_EMITTED.value:
-                tokens.append(ev["data"]["delta"])
+            if ev.type == EventType.TOKEN_EMITTED:
+                tokens.append(ev.data["delta"])
                 nonlocal cancel_sent
                 if not cancel_sent:
                     await orch.control(
                         session_id=session.id, command={"type": "cancel.requested"}
                     )
                     cancel_sent = True
-            if ev["type"] == EventType.CANCEL_APPLIED.value:
+            if ev.type == EventType.CANCEL_APPLIED:
                 return
 
     await consume()

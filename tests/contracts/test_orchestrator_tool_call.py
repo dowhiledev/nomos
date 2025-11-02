@@ -49,10 +49,10 @@ async def test_orchestrator_handles_tool_call():
 
     async def consume():
         async for ev in orch.stream(session_id=session.id, inputs=inputs):
-            if ev["type"] == "tool.started":
+            if ev.type == EventType.TOOL_STARTED:
                 nonlocal seen_started
                 seen_started = True
-            if ev["type"] == "tool.completed":
+            if ev.type == EventType.TOOL_COMPLETED:
                 nonlocal seen_completed
                 seen_completed = True
                 return

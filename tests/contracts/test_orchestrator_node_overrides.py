@@ -44,9 +44,9 @@ async def test_node_level_provider_override_applied():
         },
     ):
         events.append(ev)
-        if ev["type"] == EventType.DECISION_COMPLETED.value:
+        if ev.type == EventType.DECISION_COMPLETED:
             break
-    assert events[-1]["data"]["response"] == "B"
+    assert events[-1].data["response"] == "B"
 
 
 class ProviderTool:
@@ -87,7 +87,7 @@ async def test_node_level_allowed_tools_filter():
                 ]
             },
         ):
-            if ev["type"] == "tool.completed":
+            if ev.type == EventType.TOOL_COMPLETED:
                 completed = True
                 return
 

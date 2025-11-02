@@ -40,11 +40,11 @@ async def test_orchestrator_streams_provider_events():
 
     async def consume():
         async for ev in orch.stream(session_id=session.id, inputs=inputs):
-            if ev["type"] == EventType.TOKEN_EMITTED.value:
-                tokens.append(ev["data"]["delta"])
-            if ev["type"] == EventType.DECISION_COMPLETED.value:
+            if ev.type == EventType.TOKEN_EMITTED:
+                tokens.append(ev.data["delta"])
+            if ev.type == EventType.DECISION_COMPLETED:
                 nonlocal decision
-                decision = ev["data"]
+                decision = ev.data
                 return
 
     await consume()

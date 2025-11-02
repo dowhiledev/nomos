@@ -2,7 +2,7 @@ import asyncio
 import pytest
 
 from nomos.core.store.memory import InMemoryEventStore
-from nomos.core.events import SessionEvent
+from nomos.core.events import SessionEvent, EventType
 
 
 @pytest.mark.asyncio
@@ -13,11 +13,21 @@ async def test_event_store_append_and_subscribe():
     async def producer():
         await asyncio.sleep(0.01)
         await store.append(
-            session_id, [SessionEvent(session_id=session_id, type="x", data={"i": 1})]
+            session_id,
+            [
+                SessionEvent(
+                    session_id=session_id, type=EventType.SESSION_CREATED, data={"i": 1}
+                )
+            ],
         )
         await asyncio.sleep(0.01)
         await store.append(
-            session_id, [SessionEvent(session_id=session_id, type="y", data={"i": 2})]
+            session_id,
+            [
+                SessionEvent(
+                    session_id=session_id, type=EventType.INPUT_ENQUEUED, data={"i": 2}
+                )
+            ],
         )
 
     async def consumer():
@@ -30,5 +40,5 @@ async def test_event_store_append_and_subscribe():
     results = await asyncio.gather(producer(), consumer())
     # results[1] contains collected events from consumer
     collected = results[1]
-    assert collected[0].type == "x"
-    assert collected[1].type == "y"
+    assert collected[0].type == EventType.SESSION_CREATED
+    assert collected[1].type == EventType.INPUT_ENQUEUED

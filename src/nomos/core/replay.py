@@ -13,13 +13,13 @@ def project_state(session_id: str, events: List[SessionEvent]) -> Dict[str, Any]
     tail = []
     for ev in events[-50:]:
         tail.append(ev)
-        if ev.type == EventType.DECISION_COMPLETED.value:
+        if ev.type == EventType.DECISION_COMPLETED:
             state.last_action = "decision.completed"
-        if ev.type == EventType.TOKEN_EMITTED.value:
+        if ev.type == EventType.TOKEN_EMITTED:
             state.last_action = "io.token"
-        if ev.type == EventType.ROUTING_APPLIED.value:
+        if ev.type == EventType.ROUTING_APPLIED:
             state.current_node = ev.data.get("to")
-        if ev.type == EventType.CHECKPOINT_RESTORED.value:
+        if ev.type == EventType.CHECKPOINT_RESTORED:
             state.current_node = ev.data.get("node_id")
     state.history_tail = tail
     return state.model_dump()

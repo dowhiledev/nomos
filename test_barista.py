@@ -178,9 +178,9 @@ async def main() -> None:
     # Process initial greeting
     async for ev in orch.stream(session_id=s.id):
         t = ev.get("type")
-        if t == EventType.TOKEN_EMITTED.value:
+        if t == EventType.TOKEN_EMITTED:
             print(ev["data"].get("delta"), end="", flush=True)
-        elif t == EventType.DECISION_COMPLETED.value:
+        elif t == EventType.DECISION_COMPLETED:
             data = ev.get("data", {})
             if data.get("action") == "RESPOND":
                 print(f"\n[response] {data.get('response', '')}")
@@ -213,7 +213,7 @@ async def main() -> None:
                         ]
                     },
                 )
-        elif t == EventType.ROUTING_APPLIED.value:
+        elif t == EventType.ROUTING_APPLIED:
             print(f"\n[route] {ev.get('data')}")
             await orch.input(session_id=s.id, inputs={"messages": []})
 
@@ -235,9 +235,9 @@ async def main() -> None:
     # Process the response
     async for ev in orch.stream(session_id=s.id):
         t = ev.get("type")
-        if t == EventType.TOKEN_EMITTED.value:
+        if t == EventType.TOKEN_EMITTED:
             print(ev["data"].get("delta"), end="", flush=True)
-        elif t == EventType.DECISION_COMPLETED.value:
+        elif t == EventType.DECISION_COMPLETED:
             data = ev.get("data", {})
             if data.get("action") == "RESPOND":
                 print(f"\n[response] {data.get('response', '')}")
@@ -270,7 +270,7 @@ async def main() -> None:
                         ]
                     },
                 )
-        elif t == EventType.ROUTING_APPLIED.value:
+        elif t == EventType.ROUTING_APPLIED:
             print(f"\n[route] {ev.get('data')}")
             # Continue processing the stream without calling input
 

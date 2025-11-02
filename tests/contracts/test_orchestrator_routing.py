@@ -33,7 +33,7 @@ async def test_orchestrator_applies_routing_and_updates_state():
     async def consume():
         nonlocal routed
         async for ev in orch.stream(session_id=session.id, inputs=inputs):
-            if ev["type"] == "routing.applied":
+            if ev.type == "routing.applied":
                 routed = True
                 return
 

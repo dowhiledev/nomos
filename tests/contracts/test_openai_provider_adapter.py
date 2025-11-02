@@ -39,5 +39,5 @@ async def test_openai_provider_stream_decision_with_fake_client():
     frames = []
     async for f in provider.stream_decision(messages, schema=None):
         frames.append(f)
-    assert any(fr["type"] == EventType.TOKEN_EMITTED.value for fr in frames)
-    assert frames[-1]["type"] == EventType.DECISION_COMPLETED.value
+    assert any(fr["type"] == EventType.TOKEN_EMITTED for fr in frames)
+    assert frames[-1]["type"] == EventType.DECISION_COMPLETED

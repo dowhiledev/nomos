@@ -157,7 +157,7 @@ async def main() -> None:
     # Load the graph from YAML - this is the key difference!
     yaml_path = Path(__file__).parent / "barista_agent.yaml"
     g = Graph.from_yaml(yaml_path)
-    
+
     # Compile the spec
     spec = g.compile()
 
@@ -171,7 +171,9 @@ async def main() -> None:
     )
     s = await orch.create_session()
 
-    print("Welcome to Nomos Barista (YAML Configuration)! Type /quit to exit, /pause, /resume, /cancel.")
+    print(
+        "Welcome to Nomos Barista (YAML Configuration)! Type /quit to exit, /pause, /resume, /cancel."
+    )
 
     while True:
         try:
@@ -207,16 +209,19 @@ async def main() -> None:
                     session_id=s.id,
                     inputs={
                         "messages": [
-                            {"role": "user", "content": [{"type": "text", "data": user_input}]}
+                            {
+                                "role": "user",
+                                "content": [{"type": "text", "data": user_input}],
+                            }
                         ]
                     },
                 )
 
                 # Process the response turn - continue until we get a RESPOND
                 async for ev in orch.stream(session_id=s.id):
-                    t = ev.get("type")
-                    if t == EventType.DECISION_COMPLETED.value:
-                        data = ev.get("data", {})
+                    t = ev.type
+                    if t == EventType.DECISION_COMPLETED:
+                        data = ev.data
                         if data.get("action") == "RESPOND":
                             response = data.get("response", "")
                             print(f"Agent -> {response}")

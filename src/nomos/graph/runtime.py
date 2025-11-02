@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional, Union, Dict, Any
+from typing import List, Optional, Union
 
 import yaml
 from pydantic import BaseModel
@@ -57,31 +57,31 @@ class Graph(BaseModel):
     @classmethod
     def from_yaml(cls, yaml_path: Union[str, Path]) -> "Graph":
         """Load a graph from a YAML configuration file.
-        
+
         Args:
             yaml_path: Path to the YAML configuration file
-            
+
         Returns:
             Graph instance with steps and transitions loaded from YAML
         """
         path = Path(yaml_path)
         if not path.exists():
             raise FileNotFoundError(f"YAML file not found: {yaml_path}")
-        
-        with open(path, 'r') as f:
+
+        with open(path, "r") as f:
             config = yaml.safe_load(f)
-        
+
         # Create the graph instance
         graph = cls(
             name=config["name"],
             llm=config.get("llm", {}).get("provider"),
-            memory=config.get("memory")
+            memory=config.get("memory"),
         )
-        
+
         # Set the entry point
         if "entry_point" in config:
             graph._start = config["entry_point"]
-        
+
         # Process steps
         steps_config = config.get("steps", {})
         for step_id, step_data in steps_config.items():
@@ -91,24 +91,22 @@ class Graph(BaseModel):
                 prompt=step_data.get("prompt"),
                 llm=step_data.get("llm"),
                 tools=step_data.get("tools", []),
-                memory=step_data.get("memory")
+                memory=step_data.get("memory"),
             )
             graph._nodes.append(step)
-            
+
             # Set start if not already set
             if graph._start is None:
                 graph._start = step_id
-            
+
             # Process transitions from this step
             transitions = step_data.get("transitions", [])
             for trans_data in transitions:
                 transition = Transition(
-                    from_id=step_id,
-                    to_id=trans_data["to"],
-                    when=trans_data.get("when")
+                    from_id=step_id, to_id=trans_data["to"], when=trans_data.get("when")
                 )
                 graph._edges.append(transition)
-        
+
         return graph
 
     def compile(self) -> AgentSpec:

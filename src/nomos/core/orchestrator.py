@@ -2,7 +2,7 @@
 
 Implements the minimal API used by the examples:
 - create_session() -> returns an object with .id
-- stream(session_id, inputs=None) -> async iterator of SessionEvents (dicts)
+- stream(session_id, inputs=None) -> async iterator of SessionEvent objects
 - input(session_id, inputs) -> enqueue user messages
 - control(session_id, command) -> apply control (pause/resume/cancel/checkpoint)
 - materialize_state(session_id) -> SessionState (dict)
@@ -218,9 +218,7 @@ class Orchestrator:
         await self._append(
             sid,
             [
-                SessionEvent(
-                    session_id=sid, type=EventType.SESSION_CREATED.value, data={}
-                ),
+                SessionEvent(session_id=sid, type=EventType.SESSION_CREATED, data={}),
             ],
         )
         inc(EventType.SESSION_CREATED.value)
@@ -244,7 +242,7 @@ class Orchestrator:
             [
                 SessionEvent(
                     session_id=session_id,
-                    type=EventType.INPUT_ENQUEUED.value,
+                    type=EventType.INPUT_ENQUEUED,
                     data=inputs.model_dump(),
                 ),
             ],
@@ -275,7 +273,7 @@ class Orchestrator:
                     [
                         SessionEvent(
                             session_id=session_id,
-                            type=EventType.DECISION_STARTED.value,
+                            type=EventType.DECISION_STARTED,
                             data={},
                             node_id=self._current_node.get(session_id),
                         ),
@@ -289,7 +287,7 @@ class Orchestrator:
                         [
                             SessionEvent(
                                 session_id=session_id,
-                                type=EventType.DECISION_COMPLETED.value,
+                                type=EventType.DECISION_COMPLETED,
                                 data={
                                     "action": "RESPOND",
                                     "response": "(provider not configured)",
@@ -362,7 +360,7 @@ class Orchestrator:
                             self._cancel_flags[session_id] = False
                             break
                         ftype = frame.get("type")
-                        if ftype == EventType.TOKEN_EMITTED.value:
+                        if ftype == EventType.TOKEN_EMITTED:
                             try:
                                 tf = TokenFrame.model_validate(frame)
                                 data_payload = tf.data
@@ -372,7 +370,7 @@ class Orchestrator:
                                     [
                                         SessionEvent(
                                             session_id=session_id,
-                                            type=EventType.ERROR_OCCURRED.value,
+                                            type=EventType.ERROR_OCCURRED,
                                             data={
                                                 "message": f"invalid token frame: {exc}"
                                             },
@@ -386,7 +384,7 @@ class Orchestrator:
                                 [
                                     SessionEvent(
                                         session_id=session_id,
-                                        type=EventType.TOKEN_EMITTED.value,
+                                        type=EventType.TOKEN_EMITTED,
                                         data=data_payload,
                                     )
                                 ],
@@ -394,7 +392,7 @@ class Orchestrator:
                             inc(EventType.TOKEN_EMITTED.value)
                             # continue streaming provider frames
                             continue
-                        elif ftype == EventType.DECISION_COMPLETED.value:
+                        elif ftype == EventType.DECISION_COMPLETED:
                             try:
                                 df = DecisionFrame.model_validate(frame)
                                 ddata = df.data
@@ -404,7 +402,7 @@ class Orchestrator:
                                     [
                                         SessionEvent(
                                             session_id=session_id,
-                                            type=EventType.ERROR_OCCURRED.value,
+                                            type=EventType.ERROR_OCCURRED,
                                             data={
                                                 "message": f"invalid decision frame: {exc}"
                                             },
@@ -418,7 +416,7 @@ class Orchestrator:
                                 [
                                     SessionEvent(
                                         session_id=session_id,
-                                        type=EventType.DECISION_COMPLETED.value,
+                                        type=EventType.DECISION_COMPLETED,
                                         data=ddata,
                                         node_id=self._current_node.get(session_id),
                                     )
@@ -450,7 +448,7 @@ class Orchestrator:
                                         [
                                             SessionEvent(
                                                 session_id=session_id,
-                                                type=EventType.ERROR_OCCURRED.value,
+                                                type=EventType.ERROR_OCCURRED,
                                                 data={
                                                     "message": "tool runner not configured or invalid tool call",
                                                     "tool_call": tool_call,
@@ -517,9 +515,19 @@ class Orchestrator:
                                             self._cancel_events[session_id].clear()
                                             break
                                         # Convert tool frame to SessionEvent
+                                        # Map tool frame type strings to EventType enum
+                                        frame_type_str = tframe.get(
+                                            "type", "tool.frame"
+                                        )
+                                        try:
+                                            frame_type = EventType(frame_type_str)
+                                        except ValueError:
+                                            # Fallback for unknown types
+                                            frame_type = EventType.ERROR_OCCURRED
+
                                         session_event = SessionEvent(
                                             session_id=session_id,
-                                            type=tframe["type"],
+                                            type=frame_type,
                                             data={
                                                 k: v
                                                 for k, v in tframe.items()
@@ -528,8 +536,8 @@ class Orchestrator:
                                             node_id=current_node_id,
                                         )
                                         await self._append(session_id, [session_event])
-                                        inc(tframe.get("type", "tool.frame"))
-                                        if tframe.get("type") == "tool.completed":
+                                        inc(frame_type_str)
+                                        if frame_type_str == "tool.completed":
                                             last_result = tframe.get("result")
 
                                     # feed tool result back into messages for next turn
@@ -564,7 +572,7 @@ class Orchestrator:
                                         [
                                             SessionEvent(
                                                 session_id=session_id,
-                                                type=EventType.ROUTING_APPLIED.value,
+                                                type=EventType.ROUTING_APPLIED,
                                                 data={
                                                     "from": self._current_node.get(
                                                         session_id
@@ -602,7 +610,7 @@ class Orchestrator:
                     [
                         SessionEvent(
                             session_id=session_id,
-                            type=EventType.ERROR_OCCURRED.value,
+                            type=EventType.ERROR_OCCURRED,
                             data={"message": str(exc)},
                         )
                     ],
@@ -626,7 +634,7 @@ class Orchestrator:
                 [
                     SessionEvent(
                         session_id=session_id,
-                        type=EventType.CANCEL_APPLIED.value,
+                        type=EventType.CANCEL_APPLIED,
                         data={"reason": "requested"},
                     )
                 ],
@@ -648,7 +656,7 @@ class Orchestrator:
                 [
                     SessionEvent(
                         session_id=session_id,
-                        type=EventType.CHECKPOINT_CREATED.value,
+                        type=EventType.CHECKPOINT_CREATED,
                         data={"id": cid, "node_id": cp.node_id},
                     )
                 ],
@@ -666,7 +674,7 @@ class Orchestrator:
                 [
                     SessionEvent(
                         session_id=session_id,
-                        type=EventType.CHECKPOINT_RESTORED.value,
+                        type=EventType.CHECKPOINT_RESTORED,
                         data={"id": cid_restore, "node_id": cp.node_id},
                     )
                 ],
@@ -679,7 +687,7 @@ class Orchestrator:
             [
                 SessionEvent(
                     session_id=session_id,
-                    type=EventType.CONTROL_APPLIED.value,
+                    type=EventType.CONTROL_APPLIED,
                     data=command.model_dump(),
                 )
             ],
@@ -690,7 +698,7 @@ class Orchestrator:
         self,
         session_id: str,
         inputs: Optional[Union[SessionInput, Dict[str, Any]]] = None,
-    ) -> AsyncIterator[Dict[str, Any]]:
+    ) -> AsyncIterator[SessionEvent]:
         # If initial inputs provided, enqueue them first
         if inputs:
             if isinstance(inputs, dict):
@@ -704,7 +712,7 @@ class Orchestrator:
 
         # For now, just forward events appended to the store (including inputs/controls)
         async for ev in self._store.subscribe(session_id):
-            yield ev.model_dump()
+            yield ev
 
     async def materialize_state(self, session_id: str) -> SessionState:
         events = await self._store.read_by_session(session_id)
@@ -712,11 +720,11 @@ class Orchestrator:
         # A minimal projection: track last action/token and maintain a small tail
         for ev in events[-50:]:
             state.history_tail.append(ev)
-            if ev.type == EventType.DECISION_COMPLETED.value:
+            if ev.type == EventType.DECISION_COMPLETED:
                 state.last_action = "decision.completed"
-            if ev.type == EventType.TOKEN_EMITTED.value:
+            if ev.type == EventType.TOKEN_EMITTED:
                 state.last_action = "io.token"
-            if ev.type == EventType.ROUTING_APPLIED.value:
+            if ev.type == EventType.ROUTING_APPLIED:
                 state.current_node = ev.data.get("to")
         # if never routed, use initial
         if not state.current_node:

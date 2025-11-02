@@ -54,16 +54,16 @@ async def test_cancel_mid_tool_propagates_and_stops_stream():
     async def consume():
         nonlocal saw_progress, saw_tool_end
         async for ev in orch.stream(session_id=session.id, inputs=inputs):
-            if ev["type"] == "tool.progress":
+            if ev.type == EventType.TOOL_PROGRESS:
                 saw_progress = True
                 # issue cancel once we see progress
                 await orch.control(
                     session_id=session.id, command={"type": "cancel.requested"}
                 )
-            if ev["type"] in (
-                "tool.error",
-                "tool.completed",
-                EventType.CANCEL_APPLIED.value,
+            if ev.type in (
+                EventType.TOOL_ERROR,
+                EventType.TOOL_COMPLETED,
+                EventType.CANCEL_APPLIED,
             ):
                 saw_tool_end = True
                 return

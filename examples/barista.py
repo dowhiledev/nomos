@@ -127,7 +127,7 @@ async def finalize_order(
         return "No orders to finalize."
     total_price = get_total_price()
     balance = payment - total_price if (payment and payment_method == "Cash") else None
-    if balance < 0:
+    if balance is not None and balance < 0:
         return (
             f"Insufficient payment amount for the order. Requires ${-balance:.2f} more."
         )
@@ -142,7 +142,7 @@ async def finalize_order(
         }
     )
     clear_cart()
-    if balance is not None or balance > 0:
+    if balance is not None and balance > 0:
         return (
             f"Order finalized! Total price: ${total_price:.2f}. "
             f"Payment method: {payment_method}. Change: ${balance:.2f}. Thank you for your order!"
@@ -334,9 +334,9 @@ async def main() -> None:
 
             # Process the response turn - continue until we get a RESPOND
             async for ev in orch.stream(session_id=s.id):
-                t = ev.get("type")
-                if t == EventType.DECISION_COMPLETED.value:
-                    data = ev.get("data", {})
+                t = ev.type
+                if t == EventType.DECISION_COMPLETED:
+                    data = ev.data
                     if data.get("action") == "RESPOND":
                         response = data.get("response", "")
                         print(f"Agent -> {response}")
