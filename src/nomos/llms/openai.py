@@ -28,6 +28,22 @@ if TYPE_CHECKING:
     from openai import AsyncOpenAI
 
 
+async def _async_iter_wrapper(sync_iter):  # noqa: ANN001
+    """Wrap a sync iterator to be async-iterable.
+
+    Allows using sync iterators with async for loops by yielding
+    items one at a time in an async generator.
+
+    Args:
+        sync_iter: A synchronous iterator to wrap.
+
+    Yields:
+        Items from the sync iterator.
+    """
+    for item in sync_iter:
+        yield item
+
+
 def _to_openai_content(parts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:  # noqa: ANN401
     """Convert Nomos content parts to OpenAI message content array.
 
@@ -286,7 +302,7 @@ class OpenAI(LLMProvider):
 
         # Try structured outputs first (non-streaming)
         try:
-            completion = client.beta.chat.completions.parse(
+            completion = await client.beta.chat.completions.parse(
                 model=self._model,
                 messages=oai_messages,
                 response_format=Decision,
@@ -309,7 +325,7 @@ class OpenAI(LLMProvider):
 
         # Start streaming chat completion with JSON mode
         try:
-            stream = client.chat.completions.create(
+            stream = await client.chat.completions.create(
                 model=self._model,
                 messages=oai_messages,
                 stream=True,
@@ -317,12 +333,14 @@ class OpenAI(LLMProvider):
             )
         except TypeError:
             # Fake clients in tests may not accept response_format
-            stream = client.chat.completions.create(
+            result = client.chat.completions.create(
                 model=self._model, messages=oai_messages, stream=True
             )
+            # Wrap sync iterator for use in async for
+            stream = _async_iter_wrapper(result)
 
-        # The iterator is synchronous; bridge into async context
-        for chunk in stream:
+        # Iterate through the stream (async or wrapped sync)
+        async for chunk in stream:
             try:
                 choice = chunk.choices[0]
                 delta = getattr(choice, "delta", None)
