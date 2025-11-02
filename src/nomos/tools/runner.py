@@ -1,7 +1,12 @@
-"""Simple tool runner implementing ToolRunner over a registry of callables.
+"""Tool runner implementation executing registered functions with validation and isolation.
 
-Tools can be registered via the @runner.tool() decorator, which generates schemas
-and handles event emission automatically.
+SimpleToolRunner is the primary implementation of the ToolRunner protocol.
+It provides:
+- Function registration via decorator or registry
+- Parameter schema validation via Pydantic
+- Multiple execution modes (inline, thread, process)
+- Timeout and cancellation support
+- Event streaming for execution progress
 """
 
 from __future__ import annotations
@@ -20,11 +25,19 @@ from nomos.core.types import ToolFrameUnion, ToolArgs
 
 
 ToolCallable = Callable[..., Any]
+"""Type alias for tool functions."""
 
 
 @dataclass
 class ToolInfo:
-    """Metadata for a registered tool."""
+    """Metadata for a registered tool.
+    
+    Attributes:
+        func: The tool function (sync or async).
+        schema: Pydantic model for parameter validation.
+        timeout: Optional per-tool timeout in seconds.
+        description: Tool description from docstring.
+    """
 
     func: ToolCallable
     schema: type[BaseModel]
@@ -33,14 +46,46 @@ class ToolInfo:
 
 
 class ToolExecutionContext:
-    """Context passed to tool functions for emitting events."""
+    """Context object passed to tool functions during execution.
+    
+    Allows tools to emit events (progress, output) during execution.
+    Tools can call emit() to report progress without waiting for completion.
+    
+    Attributes:
+        tool_name: Name of the executing tool.
+    
+    Example:
+        >>> async def my_tool(ctx: ToolExecutionContext) -> str:
+        ...     ctx.emit("tool.progress", "Starting...")
+        ...     await asyncio.sleep(1)
+        ...     ctx.emit("tool.stdout", "Done!")
+        ...     return "result"
+    """
 
     def __init__(self, tool_name: str):
+        """Initialize execution context.
+        
+        Args:
+            tool_name: Name of the tool being executed.
+        """
         self.tool_name = tool_name
         self._events: List[Dict[str, Any]] = []
 
     def emit(self, event_type: str, data: Any = None, **kwargs) -> None:
-        """Emit a tool event."""
+        """Emit a tool event during execution.
+        
+        Args:
+            event_type: Event type ("tool.progress", "tool.stdout", etc).
+            data: Event-specific data. Meaning depends on event_type:
+                - For "tool.progress": stage description (string)
+                - For "tool.stdout": output line (string)
+                - Otherwise: arbitrary data dict
+            **kwargs: Additional event fields.
+        
+        Example:
+            >>> ctx.emit("tool.progress", "phase1")
+            >>> ctx.emit("tool.stdout", "Step completed")
+        """
         event = {"type": event_type, "tool": self.tool_name}
         if data is not None:
             if isinstance(data, dict):
@@ -58,12 +103,27 @@ class ToolExecutionContext:
         self._events.append(event)
 
     def get_events(self) -> List[Dict[str, Any]]:
-        """Get collected events."""
+        """Get all events emitted during execution.
+        
+        Returns:
+            List of event dicts accumulated via emit() calls.
+        """
         return self._events
 
 
 def _create_tool_schema(func: Callable[..., Any], name: str) -> type[BaseModel]:
-    """Create a Pydantic model from function signature."""
+    """Create a Pydantic model from function signature.
+    
+    Introspects the function to extract parameters and create a schema model
+    for validation. Skips special parameters like 'ctx'.
+    
+    Args:
+        func: Tool function to introspect.
+        name: Name for the generated schema class.
+    
+    Returns:
+        Pydantic BaseModel subclass for parameter validation.
+    """
     sig = inspect.signature(func)
     fields = {}
 
@@ -81,10 +141,32 @@ def _create_tool_schema(func: Callable[..., Any], name: str) -> type[BaseModel]:
 
 
 def _call_sync(fn: ToolCallable, kwargs: Dict[str, Any]) -> Any:  # noqa: ANN401
+    """Call a sync function with kwargs (for process pool executor)."""
     return fn(**kwargs)
 
 
 class SimpleToolRunner(ToolRunner):
+    """Simple implementation of ToolRunner protocol.
+    
+    Manages a registry of tool functions and executes them with:
+    - Pydantic schema validation
+    - ACL/permission checking
+    - Configurable execution modes (inline, thread, process)
+    - Timeout enforcement
+    - Event streaming
+    
+    Supports both sync and async functions. Can be used as a context manager
+    or decorator for tool registration.
+    
+    Example:
+        >>> runner = SimpleToolRunner(timeout_s=10.0)
+        >>> @runner.tool("add")
+        ... def add(a: int, b: int) -> int:
+        ...     return a + b
+        >>> async for frame in runner.run("add", {"a": 1, "b": 2}, ctx):
+        ...     print(frame)
+    """
+
     def __init__(
         self,
         registry: Dict[str, ToolCallable] | None = None,
@@ -94,6 +176,19 @@ class SimpleToolRunner(ToolRunner):
         execution_mode: str = "inline",  # inline | thread | process
         processes: int | None = None,
     ) -> None:
+        """Initialize the tool runner.
+        
+        Args:
+            registry: Optional dict of {tool_name: callable} for backward compatibility.
+            timeout_s: Default timeout in seconds for all tools.
+            allowed_tools: Optional set of tool names to allow (ACL).
+                If set, only tools in this set can be executed.
+            execution_mode: How to execute functions:
+                - "inline": Run synchronously in event loop
+                - "thread": Run in thread pool
+                - "process": Run in process pool
+            processes: Number of processes for "process" mode (default: auto).
+        """
         self._registry: Dict[str, ToolInfo] = {}
         self._timeout = timeout_s
         self._allowed = allowed_tools
@@ -119,10 +214,18 @@ class SimpleToolRunner(ToolRunner):
         self, name: str | None = None, *, timeout: float | None = None
     ) -> Callable[[ToolCallable], ToolCallable]:
         """Decorator to register a tool function.
-
+        
         Args:
-            name: Tool name. If None, uses function name.
-            timeout: Tool timeout in seconds.
+            name: Tool name (defaults to function name).
+            timeout: Per-tool timeout in seconds (overrides runner default).
+        
+        Returns:
+            Decorator that registers the function and returns it unchanged.
+        
+        Example:
+            >>> @runner.tool("greet", timeout=5.0)
+            ... async def greet(name: str) -> str:
+            ...     return f"Hello, {name}!"
         """
 
         def decorator(func: ToolCallable) -> ToolCallable:
@@ -148,6 +251,24 @@ class SimpleToolRunner(ToolRunner):
     async def run(
         self, tool_name: str, args: ToolArgs, ctx: Dict[str, Any]
     ) -> AsyncIterator[ToolFrameUnion]:
+        """Execute a tool and stream execution frames.
+        
+        Implements the ToolRunner protocol. Executes the named tool with given
+        arguments and streams execution frames (started, progress, completed, error).
+        
+        Args:
+            tool_name: Name of the tool to execute.
+            args: Tool arguments (validated against schema).
+            ctx: Execution context (with session_id, node_id, etc).
+        
+        Yields:
+            ToolFrameUnion frames (ToolStarted, ToolProgress, ToolStdout, ToolCompleted, or ToolError).
+        
+        Example:
+            >>> async for frame in runner.run("add", {"a": 1, "b": 2}, ctx):
+            ...     if frame["type"] == "tool.completed":
+            ...         print(f"Result: {frame['result']}")
+        """
         # ACL check
         if self._allowed is not None and tool_name not in self._allowed:
             yield {"type": "tool.error", "tool": tool_name, "error": "unauthorized"}
@@ -233,7 +354,26 @@ class SimpleToolRunner(ToolRunner):
         call_kwargs: Dict[str, Any],
         exec_ctx: ToolExecutionContext,
     ) -> Any:
-        """Execute the tool function with appropriate timeout and execution mode."""
+        """Execute the tool function with appropriate timeout and execution mode.
+        
+        Internal method that handles:
+        - Async vs sync function detection
+        - Execution mode selection (inline, thread, process)
+        - Timeout enforcement
+        - Context injection
+        
+        Args:
+            tool_info: Tool metadata and function.
+            call_kwargs: Validated arguments for the tool.
+            exec_ctx: Execution context to pass to tool.
+        
+        Returns:
+            The tool's return value.
+        
+        Raises:
+            Exception: Any exception from tool execution.
+            asyncio.TimeoutError: If timeout is exceeded.
+        """
         fn = tool_info.func
 
         # Add execution context if function accepts it
@@ -295,7 +435,18 @@ class SimpleToolRunner(ToolRunner):
 async def _iterate_with_timeout(
     agen: AsyncIterator[Dict[str, Any]], timeout: float
 ) -> AsyncIterator[Dict[str, Any]]:
-    """Iterate an async generator with a timeout applied to awaiting the next item."""
+    """Iterate an async generator with a timeout applied to awaiting the next item.
+    
+    Args:
+        agen: Async generator to iterate.
+        timeout: Timeout in seconds for each iteration step.
+    
+    Yields:
+        Items from the async generator.
+    
+    Raises:
+        asyncio.TimeoutError: If timeout is exceeded waiting for next item.
+    """
     try:
         anext = agen.__anext__  # type: ignore[attr-defined]
     except AttributeError:  # pragma: no cover - defensive
