@@ -1,8 +1,4 @@
-"""Nomos vNext Barista Example - Interactive Coffee Ordering Agent
-
-This example demonstrates a conversational agent that helps customers order coffee.
-It uses a graph-based workflow with OpenAI for natural language understanding.
-"""
+"""Test version of barista example with automated inputs."""
 
 import asyncio
 from typing import Any, Dict
@@ -166,11 +162,15 @@ async def main() -> None:
     # Use OpenAI provider
     provider = OpenAI()
     orch = Orchestrator(
-        agent=spec, provider=provider, tool_runner=runner, node_overrides=node_overrides, verbose=True
+        agent=spec,
+        provider=provider,
+        tool_runner=runner,
+        node_overrides=node_overrides,
+        verbose=True,
     )
     s = await orch.create_session()
 
-    print("Welcome to Nomos Barista! Type /quit to exit, /pause, /resume, /cancel.")
+    print("Starting automated test...")
 
     # Start with initial decision at greeting
     await orch.input(session_id=s.id, inputs={"messages": []})
@@ -189,60 +189,85 @@ async def main() -> None:
             break
         elif t and t.startswith("tool."):
             print(f"\n{ev}")
+            if ev.get("type") == "tool.completed":
+                result = ev.get("result")
+                tool_name = ev.get("tool") or "tool"
+                await orch.input(
+                    session_id=s.id,
+                    inputs={
+                        "messages": [
+                            {
+                                "role": "assistant",
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "data": f"TOOL_RESULT {tool_name}: "
+                                        + (
+                                            str(result)[:1000]
+                                            if result is not None
+                                            else "done"
+                                        ),
+                                    }
+                                ],
+                            }
+                        ]
+                    },
+                )
         elif t == EventType.ROUTING_APPLIED.value:
             print(f"\n[route] {ev.get('data')}")
+            await orch.input(session_id=s.id, inputs={"messages": []})
 
-    while True:
-        try:
-            line = await asyncio.to_thread(input, "You: ")
-            line = line.strip()
-            if not line:
-                continue
-            if line == "/quit":
-                break
-            if line == "/pause":
-                await orch.control(session_id=s.id, command={"type": "pause.requested"})
-                continue
-            if line == "/resume":
-                await orch.control(
-                    session_id=s.id, command={"type": "resume.requested"}
-                )
-                continue
-            if line == "/cancel":
-                await orch.control(
-                    session_id=s.id, command={"type": "cancel.requested"}
-                )
-                continue
+    # Send user input
+    await orch.input(
+        session_id=s.id,
+        inputs={
+            "messages": [
+                {"role": "user", "content": [{"type": "text", "data": "I would like to order an espresso"}]}
+            ]
+        },
+    )
 
-            # Send user input
-            await orch.input(
-                session_id=s.id,
-                inputs={
-                    "messages": [
-                        {"role": "user", "content": [{"type": "text", "data": line}]}
-                    ]
-                },
-            )
-
-            # Process the response turn
-            async for ev in orch.stream(session_id=s.id):
-                t = ev.get("type")
-                if t == EventType.TOKEN_EMITTED.value:
-                    print(ev["data"].get("delta"), end="", flush=True)
-                elif t == EventType.DECISION_COMPLETED.value:
-                    data = ev.get("data", {})
-                    if data.get("action") == "RESPOND":
-                        print(f"\n[response] {data.get('response', '')}")
-                    else:
-                        print(f"\n[decision] {data}")
-                    # Decision completed, turn is done
-                    break
-                elif t and t.startswith("tool."):
-                    print(f"\n{ev}")
-                elif t == EventType.ROUTING_APPLIED.value:
-                    print(f"\n[route] {ev.get('data')}")
-        except KeyboardInterrupt:
+    # Process the response
+    async for ev in orch.stream(session_id=s.id):
+        t = ev.get("type")
+        if t == EventType.TOKEN_EMITTED.value:
+            print(ev["data"].get("delta"), end="", flush=True)
+        elif t == EventType.DECISION_COMPLETED.value:
+            data = ev.get("data", {})
+            if data.get("action") == "RESPOND":
+                print(f"\n[response] {data.get('response', '')}")
+            else:
+                print(f"\n[decision] {data}")
             break
+        elif t and t.startswith("tool."):
+            print(f"\n{ev}")
+            if ev.get("type") == "tool.completed":
+                result = ev.get("result")
+                tool_name = ev.get("tool") or "tool"
+                await orch.input(
+                    session_id=s.id,
+                    inputs={
+                        "messages": [
+                            {
+                                "role": "assistant",
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "data": f"TOOL_RESULT {tool_name}: "
+                                        + (
+                                            str(result)[:1000]
+                                            if result is not None
+                                            else "done"
+                                        ),
+                                    }
+                                ],
+                            }
+                        ]
+                    },
+                )
+        elif t == EventType.ROUTING_APPLIED.value:
+            print(f"\n[route] {ev.get('data')}")
+            # Continue processing the stream without calling input
 
 
 if __name__ == "__main__":

@@ -49,7 +49,12 @@ class ToolCallPayload(BaseModel):
     tool_call: ToolCall
 
 
-DecisionPayload = Union[RespondPayload, ToolCallPayload]
+class MovePayload(BaseModel):
+    action: Literal["MOVE"] = "MOVE"
+    step_id: str
+
+
+DecisionPayload = Union[RespondPayload, ToolCallPayload, MovePayload]
 
 
 class Checkpoint(BaseModel):
@@ -76,6 +81,13 @@ class ControlCommand(BaseModel):
     id: Optional[str] = None
 
 
+class Decision(BaseModel):
+    action: Literal["RESPOND", "TOOL_CALL", "MOVE"]
+    response: Optional[str] = None
+    tool_call: Optional[ToolCall] = None
+    step_id: Optional[str] = None
+
+
 __all__ = [
     "TextPart",
     "ImagePart",
@@ -88,4 +100,5 @@ __all__ = [
     "Checkpoint",
     "SessionInput",
     "ControlCommand",
+    "Decision",
 ]
