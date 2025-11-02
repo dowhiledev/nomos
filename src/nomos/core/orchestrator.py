@@ -7,6 +7,13 @@ Implements the minimal API used by the examples:
 - control(session_id, command) -> apply control (pause/resume/cancel/checkpoint)
 - materialize_state(session_id) -> SessionState (dict)
 
+Verbose mode (verbose=True) provides detailed logging of:
+- Session lifecycle events
+- Messages sent to LLM providers
+- Decisions received from providers
+- Node transitions and routing
+- Tool execution details
+
 This is a simplified first pass to enable incremental development; real decision/tool execution
 will be added as LLMProvider/ToolRunner adapters become available.
 """
@@ -14,13 +21,18 @@ will be added as LLMProvider/ToolRunner adapters become available.
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 from dataclasses import dataclass
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Union
 
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
+
 from .events import EventType, SessionEvent, TokenFrame, DecisionFrame
 from nomos.graph import AgentSpec
-from nomos.graph.prompt import edge_conditions_for_prompt
 from .state import SessionState
 from .store.memory import InMemoryEventStore
 from .store.checkpoint_memory import InMemoryCheckpointStore
@@ -30,9 +42,96 @@ from .redaction import redact_mapping
 from .schemas import SessionInput, ControlCommand
 
 
+# Initialize rich console for verbose logging
+_console = Console()
+
+
 @dataclass
 class _Session:
     id: str
+
+
+def _format_messages_table(messages: List[Dict[str, Any]]) -> Table:
+    """Format messages as a rich table."""
+    table = Table(
+        title="Messages Sent to LLM", show_header=True, header_style="bold magenta"
+    )
+    table.add_column("Role", style="cyan")
+    table.add_column("Content Preview", style="white")
+
+    for msg in messages:
+        role = msg.get("role", "unknown")
+        content = msg.get("content", "")
+
+        # Handle content parts
+        if isinstance(content, list):
+            content_text = " ".join(
+                [part.get("data", "") for part in content if isinstance(part, dict)]
+            )
+        else:
+            content_text = str(content)
+
+        preview = content_text[:150] + ("..." if len(content_text) > 150 else "")
+        table.add_row(role, preview)
+
+    return table
+
+
+def _format_decision(decision_data: Dict[str, Any]) -> Panel:
+    """Format decision as a rich panel."""
+    action = decision_data.get("action", "UNKNOWN")
+    color_map = {
+        "MOVE": "blue",
+        "TOOL_CALL": "yellow",
+        "RESPOND": "green",
+        "END": "red",
+    }
+    color = color_map.get(action, "white")
+
+    content = Text()
+    content.append("Action: ", style="bold")
+    content.append(f"{action}\n", style=f"bold {color}")
+
+    if action == "MOVE":
+        step_id = decision_data.get("step_id")
+        content.append("Target Step: ", style="bold")
+        content.append(f"{step_id}", style="cyan")
+    elif action == "TOOL_CALL":
+        tool_call = decision_data.get("tool_call", {})
+        tool_name = tool_call.get("tool_name")
+        tool_kwargs = tool_call.get("tool_kwargs", {})
+        content.append("Tool: ", style="bold")
+        content.append(f"{tool_name}\n", style="cyan")
+        content.append(f"Args: {tool_kwargs}", style="dim")
+    elif action == "RESPOND":
+        response = decision_data.get("response", "")
+        response_preview = response[:100] + ("..." if len(response) > 100 else "")
+        content.append("Response: ", style="bold")
+        content.append(f"{response_preview}", style="green")
+
+    return Panel(content, title="🤖 Decision", border_style=color)
+
+
+def _format_routing(from_node: str, to_node: str, condition: str = "") -> Panel:
+    """Format routing transition as a rich panel."""
+    content = Text()
+    content.append(f"{from_node}", style="cyan")
+    content.append(" → ", style="bold yellow")
+    content.append(f"{to_node}", style="green")
+    if condition:
+        content.append(f"\nCondition: {condition}", style="dim")
+
+    return Panel(content, title="🔀 Routing", border_style="yellow")
+
+
+def _format_tool_execution(tool_name: str, tool_kwargs: Dict[str, Any]) -> Panel:
+    """Format tool execution as a rich panel."""
+    content = Text()
+    content.append("Tool: ", style="bold")
+    content.append(f"{tool_name}\n", style="cyan")
+    content.append(f"Args: {tool_kwargs}", style="dim")
+
+    return Panel(content, title="🔧 Tool Call", border_style="yellow")
 
 
 class Orchestrator:
@@ -46,6 +145,7 @@ class Orchestrator:
         checkpoint_store: Optional[InMemoryCheckpointStore] = None,
         redact: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
         node_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
+        verbose: bool = False,
     ) -> None:
         self._agent = agent
         self._store = store or InMemoryEventStore()
@@ -60,6 +160,8 @@ class Orchestrator:
         self._resume_events: Dict[str, asyncio.Event] = {}
         self._redact = redact
         self._node_overrides: Dict[str, Dict[str, Any]] = node_overrides or {}
+        self._verbose = verbose
+        self._logger = logging.getLogger(__name__)
 
     async def _append(self, session_id: str, events: list[SessionEvent]) -> None:
         if self._redact:
@@ -93,6 +195,11 @@ class Orchestrator:
 
     async def create_session(self) -> _Session:
         sid = str(uuid.uuid4())
+
+        if self._verbose:
+            _console.rule("[bold cyan]Session Created[/bold cyan]")
+            _console.print(f"Session ID: [bold green]{sid}[/bold green]")
+
         self._input_queues[sid] = asyncio.Queue()
         self._cancel_flags[sid] = False
         self._cancel_events[sid] = asyncio.Event()
@@ -101,6 +208,11 @@ class Orchestrator:
         # initialize current node from AgentSpec if available
         if isinstance(self._agent, AgentSpec):
             self._current_node[sid] = self._agent.start
+
+            if self._verbose:
+                _console.print(
+                    f"Starting node: [bold blue]{self._agent.start}[/bold blue]"
+                )
         else:
             self._current_node[sid] = None
         await self._append(
@@ -141,10 +253,16 @@ class Orchestrator:
         q = self._input_queues[session_id]
         while True:
             payload = await q.get()
+
             try:
                 # Honor pause
                 await self._resume_events[session_id].wait()
                 # Start decision
+                current_node_id = self._current_node.get(session_id)
+
+                if self._verbose:
+                    _console.rule(f"[bold yellow]Node: {current_node_id}[/bold yellow]")
+
                 await self._append(
                     session_id,
                     [
@@ -199,17 +317,17 @@ class Orchestrator:
                         msgs = list(messages_base)
                         if isinstance(self._agent, AgentSpec) and current_node_id:
                             try:
-                                edges_txt = edge_conditions_for_prompt(
-                                    self._agent, current_node_id
-                                )  # type: ignore[arg-type]
                                 tools_list = (
                                     list(allowed_tools) if allowed_tools else []
                                 )
                                 msgs = eff_provider.build_decision_messages(  # type: ignore[union-attr]
-                                    current_node_id, edges_txt, tools_list, msgs
+                                    self._agent, current_node_id, tools_list, msgs
                                 )
                             except Exception:
                                 msgs = list(messages_base)
+                        if self._verbose:
+                            _console.print(_format_messages_table(msgs))
+
                         decision_data = None
                     done = False
                     async for frame in eff_provider.stream_decision(  # type: ignore[union-attr]
@@ -286,6 +404,10 @@ class Orchestrator:
                             )
                             inc(EventType.DECISION_COMPLETED.value)
                             decision_data = ddata or {}
+
+                            if self._verbose:
+                                _console.print(_format_decision(decision_data))
+
                             data = decision_data
                             action = data.get("action")
                             if action == "TOOL_CALL":
@@ -319,6 +441,13 @@ class Orchestrator:
                                     span(f"tool.run:{tool_name}"),
                                     measure(f"tool.run:{tool_name}"),
                                 ):
+                                    if self._verbose:
+                                        _console.print(
+                                            _format_tool_execution(
+                                                tool_name, tool_kwargs
+                                            )
+                                        )
+
                                     runner = eff_tool_runner
                                     if allowed_tools is not None:
 
@@ -372,6 +501,7 @@ class Orchestrator:
                                         inc(tframe.get("type", "tool.frame"))
                                         if tframe.get("type") == "tool.completed":
                                             last_result = tframe.get("result")
+
                                     # feed tool result back into messages for next turn
                                     if last_result is not None:
                                         import json as _json  # local import to avoid top-level cost
@@ -413,6 +543,17 @@ class Orchestrator:
                                         ],
                                     )
                                     inc(EventType.ROUTING_APPLIED.value)
+
+                                    if self._verbose:
+                                        from_node = self._current_node.get(session_id)
+                                        _console.print(
+                                            _format_routing(
+                                                from_node or "",
+                                                to_id,
+                                                f"MOVE:{data.get('step_id')}",
+                                            )
+                                        )
+
                                     self._current_node[session_id] = to_id
                             # End after one decision turn per input
                         # End after one decision turn per input (multi-turn handled by client or future loop)

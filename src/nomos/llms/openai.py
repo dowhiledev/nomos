@@ -65,46 +65,75 @@ class OpenAI(LLMProvider):
 
     def build_decision_messages(
         self,
+        agent_spec,  # AgentSpec
         current_node_id: str,
-        edges_txt: str,
-        tools_list: List[str],
+        allowed_tools: List[str],
         base_messages: List[Union[Message, Dict[str, Any]]],
     ) -> List[Union[Message, Dict[str, Any]]]:
         """Build messages for decision making with system and assistant context."""
+        # Find the current node
+        current_node = None
+        for node in agent_spec.nodes:
+            if node.id == current_node_id:
+                current_node = node
+                break
+
+        if not current_node:
+            # Fallback if node not found
+            return base_messages
+
+        # Get edges from current node
+        edges = [edge for edge in agent_spec.edges if edge.from_id == current_node_id]
+
+        # Build routes description
+        routes_desc = []
+        for edge in edges:
+            condition = edge.condition or f"move to {edge.to_id}"
+            routes_desc.append(f"- if '{condition}' then -> {edge.to_id}")
+        routes_txt = "\n".join(routes_desc)
+
+        # Build tools description (basic for now, since we don't have tool objects)
+        tools_desc = []
+        for tool_name in allowed_tools:
+            tools_desc.append(f"- {tool_name}")
+        tools_txt = "\n".join(tools_desc)
+
+        # Build system message
+        system_content = [
+            {
+                "type": "text",
+                "data": (
+                    "You are an agent deciding the next step or tool call based on the current node.\n"
+                    "Output strictly one JSON object with a single decision. Valid shapes:\n"
+                    '- MOVE: {"action":"MOVE","step_id":<one of allowed targets>}\n'
+                    '- TOOL_CALL: {"action":"TOOL_CALL","tool_call":{"tool_name":<name>,"tool_kwargs":{...}}}\n'
+                    '- RESPOND: {"action":"RESPOND","response":<text>}\n'
+                    "No commentary, no markdown, no code fences."
+                ),
+            }
+        ]
+
+        if current_node.prompt:
+            system_content.append(
+                {"type": "text", "data": f"\nInstructions: {current_node.prompt}"}
+            )
+
+        if routes_txt:
+            system_content.append(
+                {"type": "text", "data": f"\nAvailable Routes:\n{routes_txt}"}
+            )
+
+        if tools_txt:
+            system_content.append(
+                {"type": "text", "data": f"\nAvailable Tools:\n{tools_txt}"}
+            )
+
         sys_msg = {
             "role": "system",
-            "content": [
-                {
-                    "type": "text",
-                    "data": (
-                        "You are an agent deciding the next step or tool call based on the current node.\n"
-                        "Output strictly one JSON object with a single decision. Valid shapes:\n"
-                        '- MOVE: {"action":"MOVE","step_id":<one of allowed targets>}\n'
-                        '- TOOL_CALL: {"action":"TOOL_CALL","tool_call":{"tool_name":<name>,"tool_kwargs":{...}}}\n'
-                        '- RESPOND: {"action":"RESPOND","response":<text>}\n'
-                        "No commentary, no markdown, no code fences."
-                    ),
-                }
-            ],
+            "content": system_content,
         }
-        assistant_msg = {
-            "role": "assistant",
-            "content": [
-                {
-                    "type": "text",
-                    "data": f"Current node: {current_node_id}",
-                },
-                {
-                    "type": "text",
-                    "data": "Allowed targets:\n" + edges_txt,
-                },
-                {
-                    "type": "text",
-                    "data": f"Tools available: {tools_list}",
-                },
-            ],
-        }
-        return [sys_msg, assistant_msg] + base_messages
+
+        return [sys_msg] + base_messages
 
     async def stream_decision(
         self, messages: List[Union[Message, Dict[str, Any]]], schema: ProviderSchema

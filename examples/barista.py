@@ -166,7 +166,7 @@ async def main() -> None:
     # Use OpenAI provider
     provider = OpenAI()
     orch = Orchestrator(
-        agent=spec, provider=provider, tool_runner=runner, node_overrides=node_overrides
+        agent=spec, provider=provider, tool_runner=runner, node_overrides=node_overrides, verbose=True
     )
     s = await orch.create_session()
 

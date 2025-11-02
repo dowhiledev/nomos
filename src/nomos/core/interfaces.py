@@ -15,9 +15,9 @@ from .events import SessionEvent
 class LLMProvider(Protocol):
     def build_decision_messages(
         self,
+        agent_spec: Any,  # AgentSpec
         current_node_id: str,
-        edges_txt: str,
-        tools_list: List[str],
+        allowed_tools: List[str],
         base_messages: List[Union[Message, Dict[str, Any]]],
     ) -> List[Union[Message, Dict[str, Any]]]: ...
 
