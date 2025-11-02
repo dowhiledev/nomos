@@ -13,6 +13,14 @@ from .events import SessionEvent
 
 
 class LLMProvider(Protocol):
+    def build_decision_messages(
+        self,
+        current_node_id: str,
+        edges_txt: str,
+        tools_list: List[str],
+        base_messages: List[Union[Message, Dict[str, Any]]],
+    ) -> List[Union[Message, Dict[str, Any]]]: ...
+
     def stream_decision(
         self, messages: List[Union[Message, Dict[str, Any]]], schema: ProviderSchema
     ) -> AsyncIterator[ProviderFrame]: ...

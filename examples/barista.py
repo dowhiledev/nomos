@@ -24,6 +24,7 @@ _cart: list[dict] = []
 # Create tool runner
 runner = SimpleToolRunner()
 
+
 # Tools
 @runner.tool("get.options")
 async def get_available_coffee_options():
@@ -66,8 +67,8 @@ def finalize_order(payment_method: str, payment: float | None = None, ctx=None):
     total = sum(i["price"] for i in _cart)
     change = (payment or 0) - total if payment_method == "Cash" else 0
     if ctx:
-        ctx.emit('tool.progress', 'process_payment')
-        ctx.emit('tool.stdout', f'total: {total}')
+        ctx.emit("tool.progress", "process_payment")
+        ctx.emit("tool.stdout", f"total: {total}")
     _cart.clear()
     return {"ok": True, "change": change}
 
@@ -154,7 +155,11 @@ async def main() -> None:
     # Node overrides for allowed tools
     node_overrides: Dict[str, Dict[str, Any]] = {}
     for node in g._nodes:
-        allowed = {t for t in (node.tools or []) if isinstance(t, str) and t in runner._registry}
+        allowed = {
+            t
+            for t in (node.tools or [])
+            if isinstance(t, str) and t in runner._registry
+        }
         if allowed:
             node_overrides[node.id] = {"allowed_tools": allowed}
 

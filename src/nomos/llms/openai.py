@@ -63,6 +63,49 @@ class OpenAI(LLMProvider):
         self._model = model
         self._client = client
 
+    def build_decision_messages(
+        self,
+        current_node_id: str,
+        edges_txt: str,
+        tools_list: List[str],
+        base_messages: List[Union[Message, Dict[str, Any]]],
+    ) -> List[Union[Message, Dict[str, Any]]]:
+        """Build messages for decision making with system and assistant context."""
+        sys_msg = {
+            "role": "system",
+            "content": [
+                {
+                    "type": "text",
+                    "data": (
+                        "You are an agent deciding the next step or tool call based on the current node.\n"
+                        "Output strictly one JSON object with a single decision. Valid shapes:\n"
+                        '- MOVE: {"action":"MOVE","step_id":<one of allowed targets>}\n'
+                        '- TOOL_CALL: {"action":"TOOL_CALL","tool_call":{"tool_name":<name>,"tool_kwargs":{...}}}\n'
+                        '- RESPOND: {"action":"RESPOND","response":<text>}\n'
+                        "No commentary, no markdown, no code fences."
+                    ),
+                }
+            ],
+        }
+        assistant_msg = {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "text",
+                    "data": f"Current node: {current_node_id}",
+                },
+                {
+                    "type": "text",
+                    "data": "Allowed targets:\n" + edges_txt,
+                },
+                {
+                    "type": "text",
+                    "data": f"Tools available: {tools_list}",
+                },
+            ],
+        }
+        return [sys_msg, assistant_msg] + base_messages
+
     async def stream_decision(
         self, messages: List[Union[Message, Dict[str, Any]]], schema: ProviderSchema
     ) -> AsyncIterator[ProviderFrame]:
