@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
+from pydantic.config import ConfigDict
 
 from .types import ProviderSchema
 
@@ -63,10 +64,9 @@ class SessionInput(BaseModel):
     """Input data for session processing."""
 
     messages: List[Union[Message, Dict[str, Any]]] = Field(default_factory=list)
-    schema: Optional[ProviderSchema] = None
+    response_schema: Optional[ProviderSchema] = None
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class ControlCommand(BaseModel):

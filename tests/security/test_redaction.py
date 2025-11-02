@@ -27,7 +27,7 @@ async def test_event_redaction_masks_sensitive_fields():
         session_id=session.id,
         inputs=SessionInput(
             messages=[{"role": "user", "content": [{"type": "text", "data": "hi"}]}],
-            schema=None,
+            response_schema=None,
             password="secret123",
         ),
     )

@@ -2,7 +2,7 @@
 
 from .spec import AgentSpec, EdgeSpec, NodeSpec, compile_agent
 from .builder import GraphBuilder
-from .runtime import Graph, LLMNode, Edge
+from .runtime import Graph, Step, Transition
 
 __all__ = [
     "AgentSpec",
@@ -11,6 +11,6 @@ __all__ = [
     "compile_agent",
     "GraphBuilder",
     "Graph",
-    "LLMNode",
-    "Edge",
+    "Step",
+    "Transition",
 ]

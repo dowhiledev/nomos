@@ -244,7 +244,7 @@ class Orchestrator:
                         decision_data = None
                     done = False
                     async for frame in eff_provider.stream_decision(  # type: ignore[union-attr]
-                        msgs, schema=payload.get("schema")
+                        msgs, schema=payload.get("response_schema")
                     ):
                         # Check pause between frames
                         await self._resume_events[session_id].wait()

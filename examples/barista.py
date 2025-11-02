@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 from nomos.core import Orchestrator
 from nomos.core.events import EventType
-from nomos.graph import Graph, LLMNode, Edge
+from nomos.graph import Graph, Step, Transition
 from nomos.tools.runner import SimpleToolRunner
 from nomos.llms.openai import OpenAI
 
@@ -77,71 +77,71 @@ async def main() -> None:
     g = (
         Graph(name="barista")
         .add(
-            LLMNode(
+            Step(
                 id="greeting",
                 prompt="Greet the customer warmly and ask how you can help them today. Use the get.options tool to get familiar with available options.",
                 tools=["get.options"],
             ),
-            LLMNode(
+            Step(
                 id="order_entry",
                 prompt="Help the customer build their order. Ask for coffee preference and size. Use get.options to check availability. Use add.to.cart when customer confirms.",
                 tools=["get.options", "add.to.cart", "clear.cart"],
             ),
-            LLMNode(
+            Step(
                 id="order_review",
                 prompt="Review the order and total using get.summary. Ask if ready to pay.",
                 tools=["get.summary"],
             ),
-            LLMNode(
+            Step(
                 id="payment_processing",
                 prompt="Process payment using finalize.order.",
                 tools=["finalize.order"],
             ),
-            LLMNode(id="order_completed", prompt="Thank the customer and end session."),
-            LLMNode(
+            Step(id="order_completed", prompt="Thank the customer and end session."),
+            Step(
                 id="order_cancelled",
                 prompt="Cancel order and clear cart.",
                 tools=["clear.cart"],
             ),
-            LLMNode(id="session_end", prompt="End session.", tools=["clear.cart"]),
+            Step(id="session_end", prompt="End session.", tools=["clear.cart"]),
         )
         .edge(
-            Edge(
+            Transition(
                 from_id="greeting",
                 to_id="order_entry",
                 when="Customer wants to place an order",
             )
         )
         .edge(
-            Edge(
+            Transition(
                 from_id="order_entry",
                 to_id="order_review",
                 when="Customer wants to review order",
             )
         )
         .edge(
-            Edge(
+            Transition(
                 from_id="order_review",
                 to_id="payment_processing",
                 when="Customer confirms payment",
             )
         )
         .edge(
-            Edge(
+            Transition(
                 from_id="payment_processing",
                 to_id="order_completed",
                 when="Payment processed successfully",
             )
         )
         .edge(
-            Edge(
+            Transition(
                 from_id="order_review",
                 to_id="order_cancelled",
                 when="Customer wants to cancel",
             )
         )
         .edge(
-            Edge(
+            Transition(
                 from_id="order_completed",
                 to_id="session_end",
                 when="Session complete",

@@ -8,7 +8,7 @@ from pydantic.config import ConfigDict
 from .spec import AgentSpec, NodeSpec, EdgeSpec, compile_agent
 
 
-class LLMNode(BaseModel):
+class Step(BaseModel):
     id: str
     prompt: Optional[str] = None
     llm: Optional[str] = None
@@ -16,7 +16,7 @@ class LLMNode(BaseModel):
     memory: Optional[str] = None
 
 
-class Edge(BaseModel):
+class Transition(BaseModel):
     from_id: str
     to_id: str
     when: Optional[str] = None
@@ -26,20 +26,20 @@ class Graph(BaseModel):
     name: str
     llm: Optional[str] = None
     memory: Optional[str] = None
-    _nodes: List[LLMNode] = []  # type: ignore[var-annotated]
-    _edges: List[Edge] = []  # type: ignore[var-annotated]
+    _nodes: List[Step] = []  # type: ignore[var-annotated]
+    _edges: List[Transition] = []  # type: ignore[var-annotated]
     _start: Optional[str] = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def add(self, *nodes: LLMNode) -> "Graph":
+    def add(self, *nodes: Step) -> "Graph":
         for n in nodes:
             if self._start is None:
                 self._start = n.id
             self._nodes.append(n)
         return self
 
-    def edge(self, e: Edge) -> "Graph":
+    def edge(self, e: Transition) -> "Graph":
         self._edges.append(e)
         return self
 
@@ -58,4 +58,4 @@ class Graph(BaseModel):
         return compile_agent(spec)
 
 
-__all__ = ["Graph", "LLMNode", "Edge"]
+__all__ = ["Graph", "Step", "Transition"]
