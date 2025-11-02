@@ -37,23 +37,23 @@ def redact_mapping(
     mask: str = "***",
 ) -> Dict[str, Any]:
     """Return a redacted copy of a mapping with sensitive values masked.
-    
+
     Recursively traverses the mapping and replaces values for sensitive keys
     with the mask string. Preserves all other data unchanged. Works with nested
     dicts and lists.
-    
+
     Args:
         obj: The input mapping (dict-like) to redact.
         sensitive_keys: Set of key names to redact. Defaults to DEFAULT_SENSITIVE_KEYS.
             Keys are case-insensitive.
         mask: String to use for masking sensitive values (default "***").
-    
+
     Returns:
         A new dict with sensitive values masked. The input obj is not modified.
-    
+
     Raises:
         None. Function is defensive and won't crash on unexpected types.
-    
+
     Example:
         >>> data = {
         ...     "username": "alice",
@@ -80,7 +80,6 @@ def redact_mapping(
         return value
 
     return _redact(dict(obj))
-
 
 
 __all__ = ["redact_mapping", "DEFAULT_SENSITIVE_KEYS"]

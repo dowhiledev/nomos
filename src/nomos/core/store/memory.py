@@ -21,16 +21,16 @@ from nomos.core.interfaces import EventStore
 
 class InMemoryEventStore(EventStore):
     """In-memory append-only event store.
-    
+
     Stores events for each session in memory. Provides:
     - Append-only semantics via list storage
     - Subscription support via asyncio.Queue
     - Automatic event ID assignment for SSE resume capability
-    
+
     Events are organized per-session and maintain insertion order.
     All methods are async-compatible but all operations are synchronous
     (no I/O latency).
-    
+
     Example:
         >>> store = InMemoryEventStore()
         >>> event = SessionEvent(
@@ -46,7 +46,7 @@ class InMemoryEventStore(EventStore):
 
     def __init__(self) -> None:
         """Initialize the in-memory event store.
-        
+
         Sets up empty storage structures:
         - _events: Dict mapping session_id -> list of events
         - _queues: Dict mapping session_id -> subscription queue
@@ -61,12 +61,12 @@ class InMemoryEventStore(EventStore):
 
     async def append(self, session_id: str, events: List[SessionEvent]) -> None:
         """Append events to a session's log.
-        
+
         Atomically appends all events and:
         - Assigns event IDs if not present
         - Queues events for subscribers
         - Maintains session sequence numbers
-        
+
         Args:
             session_id: Session identifier.
             events: List of SessionEvent objects to append.
@@ -88,10 +88,10 @@ class InMemoryEventStore(EventStore):
 
     async def read_by_session(self, session_id: str) -> List[SessionEvent]:
         """Read all events for a session.
-        
+
         Args:
             session_id: Session identifier.
-        
+
         Returns:
             List of all SessionEvent objects in append order.
         """
@@ -99,10 +99,10 @@ class InMemoryEventStore(EventStore):
 
     async def _generator(self, session_id: str) -> AsyncIterator[SessionEvent]:
         """Internal generator for subscription streaming.
-        
+
         Args:
             session_id: Session identifier.
-        
+
         Yields:
             SessionEvent objects as they are appended.
         """
@@ -113,19 +113,18 @@ class InMemoryEventStore(EventStore):
 
     def subscribe(self, session_id: str) -> AsyncIterator[SessionEvent]:
         """Subscribe to a session's event stream.
-        
+
         Returns an async iterator that yields events as they are appended.
         New subscriptions start receiving events after subscribe() is called
         (backfill is not provided; use read_by_session() for that).
-        
+
         Args:
             session_id: Session identifier.
-        
+
         Yields:
             SessionEvent objects as appended to the session.
         """
         return self._generator(session_id)
-
 
 
 __all__ = ["InMemoryEventStore"]

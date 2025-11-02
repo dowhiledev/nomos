@@ -54,23 +54,23 @@ def create_app(
     agent: Optional[AgentSpec] = None, *, orchestrator: Optional[Orchestrator] = None
 ) -> FastAPI:
     """Create a FastAPI application for orchestrator transport.
-    
+
     Constructs a stateless FastAPI app that wraps the given orchestrator,
     exposing its functionality via REST/WS endpoints. Useful for deploying
     Nomos agents as microservices.
-    
+
     Args:
         agent: Optional AgentSpec to compile into a new orchestrator.
             Ignored if orchestrator is provided.
         orchestrator: Optional pre-built Orchestrator instance. If not provided,
             creates one from the agent spec.
-    
+
     Returns:
         FastAPI application instance ready to run or mount.
-    
+
     Raises:
         ValueError: If neither agent nor orchestrator is provided.
-    
+
     Example:
         >>> from nomos.graph import GraphBuilder
         >>> from nomos.server import create_app
@@ -86,13 +86,13 @@ def create_app(
     @app.post("/v2/sessions")
     async def create_session() -> Dict[str, Any]:  # noqa: ANN401
         """Create a new orchestrator session.
-        
+
         Initializes a fresh session with empty event log and state. Returns
         the session ID for use in subsequent requests.
-        
+
         Returns:
             JSON object with 'session_id' string.
-        
+
         Example:
             >>> # POST /v2/sessions
             >>> # Response: {"session_id": "abc123"}
@@ -103,22 +103,22 @@ def create_app(
     @app.post("/v2/sessions/{sid}/input")
     async def post_input(sid: str, payload: Dict[str, Any]) -> Dict[str, Any]:  # noqa: ANN401
         """Send user input to a session.
-        
+
         Delivers user input messages to an active session. The orchestrator will
         process the input, run decision steps, and emit events.
-        
+
         Args:
             sid: Session ID from create_session.
             payload: SessionInput payload containing messages and metadata.
                 Expected shape: {"messages": [{"role": "user", "content": "..."}]}
-        
+
         Returns:
             JSON object with 'ok': true on success.
-        
+
         Raises:
             422: If payload does not match SessionInput schema.
             404: If session not found.
-        
+
         Example:
             >>> # POST /v2/sessions/abc123/input
             >>> # Payload: {"messages": [{"role": "user", "content": "Hello"}]}
@@ -131,22 +131,22 @@ def create_app(
     @app.post("/v2/sessions/{sid}/control")
     async def post_control(sid: str, payload: Dict[str, Any]) -> Dict[str, Any]:  # noqa: ANN401
         """Send control commands to a session.
-        
+
         Sends control signals to an active session (pause, resume, cancel).
         Used to interrupt or manage long-running orchestrations.
-        
+
         Args:
             sid: Session ID from create_session.
             payload: ControlCommand payload.
                 Expected shape: {"command": "pause" | "resume" | "cancel"}
-        
+
         Returns:
             JSON object with 'ok': true on success.
-        
+
         Raises:
             422: If payload does not match ControlCommand schema.
             404: If session not found.
-        
+
         Example:
             >>> # POST /v2/sessions/abc123/control
             >>> # Payload: {"command": "pause"}
@@ -159,21 +159,21 @@ def create_app(
     @app.get("/v2/sessions/{sid}/state")
     async def get_state(sid: str) -> Dict[str, Any]:  # noqa: ANN401
         """Fetch materialized session state.
-        
+
         Returns the computed state of a session, including current node,
         message history, and decision history (last 10 actions).
-        
+
         This is a point-in-time snapshot; use /events for a full timeline.
-        
+
         Args:
             sid: Session ID from create_session.
-        
+
         Returns:
             SessionState serialized as JSON.
-        
+
         Raises:
             404: If session not found.
-        
+
         Example:
             >>> # GET /v2/sessions/abc123/state
             >>> # Response:
@@ -191,19 +191,19 @@ def create_app(
     @app.get("/v2/sessions/{sid}/timeline")
     async def get_timeline(sid: str) -> Dict[str, Any]:  # noqa: ANN401
         """Fetch complete event timeline for a session.
-        
+
         Returns all events in the session's append-only event log.
         Useful for audit, replay, and debugging.
-        
+
         Args:
             sid: Session ID from create_session.
-        
+
         Returns:
             JSON object with 'session_id' and 'events' array of SessionEvent objects.
-        
+
         Raises:
             404: If session not found.
-        
+
         Example:
             >>> # GET /v2/sessions/abc123/timeline
             >>> # Response:
@@ -222,15 +222,15 @@ def create_app(
     @app.get("/v2/metrics")
     async def get_metrics() -> Dict[str, Any]:  # noqa: ANN401
         """Fetch aggregated metrics snapshot.
-        
+
         Returns current counters and latency histograms across all sessions
         (e.g., token count, decision latency, tool execution counts).
-        
+
         Useful for monitoring, dashboards, and performance analysis.
-        
+
         Returns:
             JSON object with 'counters' and 'latencies' sections.
-        
+
         Example:
             >>> # GET /v2/metrics
             >>> # Response:
@@ -245,19 +245,19 @@ def create_app(
         sid: str, last_event_id: Optional[str] = None
     ) -> AsyncIterator[str]:
         """Generate Server-Sent Events for a session.
-        
+
         Yields historical events first (optionally after last_event_id),
         then streams new events as they occur. Supports SSE resume protocol
         for client reconnection.
-        
+
         Args:
             sid: Session ID to stream events from.
             last_event_id: Optional event ID to resume from (SSE Last-Event-ID).
                 If provided, only events after this ID are yielded.
-        
+
         Yields:
             SSE-formatted strings (id: ... \n data: ... \n\n).
-        
+
         Example:
             >>> # GET /v2/sessions/abc123/events with Last-Event-ID: 42
             >>> # Will stream events 43+
@@ -290,25 +290,25 @@ def create_app(
     @app.get("/v2/sessions/{sid}/events")
     async def sse(sid: str, request: Request) -> StreamingResponse:  # noqa: ANN401
         """Stream session events via Server-Sent Events (SSE).
-        
+
         Provides a persistent HTTP connection for real-time event streaming.
         Supports the standard SSE Last-Event-ID header for resuming interrupted
         connections.
-        
+
         Args:
             sid: Session ID to stream events from.
             request: FastAPI Request object (used to extract Last-Event-ID header).
-        
+
         Returns:
             StreamingResponse with SSE media type.
-        
+
         Example:
             >>> # GET /v2/sessions/abc123/events
             >>> # Connection: keep-alive
             >>> # Content-Type: text/event-stream
             >>> # id: 1
             >>> # data: {"type": "io.input", "data": {...}, ...}
-            >>> # 
+            >>> #
             >>> # id: 2
             >>> # data: {"type": "decision.started", ...}
         """
@@ -323,20 +323,20 @@ def create_app(
     @app.websocket("/v2/sessions/{sid}/ws")
     async def ws_endpoint(ws: WebSocket, sid: str) -> None:
         """Duplex WebSocket endpoint for real-time session interaction.
-        
+
         Accepts WebSocket connections and manages bidirectional communication:
         - Server → Client: All session events (token frames, decision frames, etc)
         - Client → Server: Input messages or control commands
-        
+
         Message Format:
             Input/control from client should be JSON with 'type' field:
             - {"type": "input", "payload": {...}} -> sends SessionInput
             - {"type": "control", "payload": {...}} -> sends ControlCommand
-        
+
         Args:
             ws: WebSocket connection from client.
             sid: Session ID to attach to.
-        
+
         Example:
             >>> # ws://localhost:8000/v2/sessions/abc123/ws
             >>> # Client sends: {"type": "input", "payload": {"messages": [...]}}

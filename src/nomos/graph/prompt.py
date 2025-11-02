@@ -14,19 +14,19 @@ from .spec import AgentSpec
 
 def edge_conditions_for_prompt(spec: AgentSpec, current: str) -> str:
     """Format routing options for a node as human-readable prompt text.
-    
+
     Generates a bulleted list of available next nodes with their natural-language
     conditions. This text can be included in the LLM's system prompt to explain
     valid routing options.
-    
+
     Args:
         spec: The AgentSpec containing edges and nodes.
         current: Current node ID.
-    
+
     Returns:
         Multi-line string with formatted routing options.
         Each line is "- to '<target>': <condition>".
-    
+
     Example:
         >>> spec = AgentSpec(
         ...     name="bot",
@@ -44,7 +44,6 @@ def edge_conditions_for_prompt(spec: AgentSpec, current: str) -> str:
             cond = (e.condition or "(no condition specified)").strip()
             lines.append(f"- to '{e.to_id}': {cond}")
     return "\n".join(lines)
-
 
 
 __all__ = ["edge_conditions_for_prompt"]

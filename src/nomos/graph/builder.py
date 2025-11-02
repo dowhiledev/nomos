@@ -25,17 +25,17 @@ from .spec import AgentSpec, EdgeSpec, NodeSpec, compile_agent
 
 class GraphBuilder(BaseModel):
     """Fluent builder for constructing agent graphs.
-    
+
     Provides a chainable API for defining nodes and edges, then compiling
     to an AgentSpec for use with the orchestrator.
-    
+
     Example:
         >>> builder = GraphBuilder(name="assistant", start="greeting")
         >>> builder.node("greeting", prompt="Greet the user")
         >>> builder.node("help", prompt="Help the user")
         >>> builder.edge("greeting", "help", condition="User needs help")
         >>> spec = builder.compile()
-    
+
     Attributes:
         name: Human-readable graph name.
         start: ID of the starting node.
@@ -50,18 +50,18 @@ class GraphBuilder(BaseModel):
 
     def node(self, id: str, *, prompt: Optional[str] = None) -> "GraphBuilder":  # noqa: A003
         """Add a node to the graph.
-        
+
         Nodes are decision points where the LLM receives instructions and
         determines the next action (respond, call tool, or move to next node).
-        
+
         Args:
             id: Unique node identifier within the graph.
             prompt: Optional LLM instruction for this node. Can be overridden
                 at runtime or in the orchestrator.
-        
+
         Returns:
             Self for method chaining.
-        
+
         Example:
             >>> builder.node("gather", prompt="Gather user information")
             >>> builder.node("respond", prompt="Generate response")
@@ -73,19 +73,19 @@ class GraphBuilder(BaseModel):
         self, from_id: str, to_id: str, *, condition: Optional[str] = None
     ) -> "GraphBuilder":
         """Add an edge (transition) between nodes.
-        
+
         Edges define routing possibilities. The condition is shown to the LLM
         as a natural-language option when deciding whether to use this edge.
-        
+
         Args:
             from_id: Source node ID.
             to_id: Target node ID.
             condition: Optional natural-language condition explaining when
                 this edge should be taken (shown to LLM).
-        
+
         Returns:
             Self for method chaining.
-        
+
         Example:
             >>> builder.edge("gather", "respond", condition="All info collected")
             >>> builder.edge("gather", "clarify", condition="Need more info")
@@ -95,17 +95,17 @@ class GraphBuilder(BaseModel):
 
     def compile(self) -> AgentSpec:
         """Compile the graph into an AgentSpec.
-        
+
         Validates the graph (reachability, no orphans, etc) and returns
         a compiled AgentSpec ready for the orchestrator.
-        
+
         Returns:
             Compiled AgentSpec.
-        
+
         Raises:
             ValueError: If the graph is invalid (e.g., start node missing,
                 unreachable nodes, duplicate edges).
-        
+
         Example:
             >>> builder = GraphBuilder(name="bot", start="greet")
             >>> builder.node("greet").node("end")
@@ -119,7 +119,6 @@ class GraphBuilder(BaseModel):
             edges=list(self._edges),
         )
         return compile_agent(spec)
-
 
 
 __all__ = ["GraphBuilder"]

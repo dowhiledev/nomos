@@ -16,10 +16,10 @@ from pydantic import BaseModel, Field
 
 class ToolStarted(BaseModel):
     """Frame emitted when tool execution begins.
-    
+
     Signals that the tool runner has accepted the tool invocation and is
     preparing or beginning execution.
-    
+
     Attributes:
         type: Literal "tool.started" frame type.
         tool: Name of the tool being executed.
@@ -27,22 +27,16 @@ class ToolStarted(BaseModel):
     """
 
     type: Literal["tool.started"] = "tool.started"
-    tool: Optional[str] = Field(
-        default=None,
-        description="Tool name"
-    )
-    data: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Additional context"
-    )
+    tool: Optional[str] = Field(default=None, description="Tool name")
+    data: Dict[str, Any] = Field(default_factory=dict, description="Additional context")
 
 
 class ToolProgress(BaseModel):
     """Frame emitted to report tool execution progress.
-    
+
     Allows tools to report intermediate progress without streaming full output.
     Useful for long-running operations.
-    
+
     Attributes:
         type: Literal "tool.progress" frame type.
         stage: Current execution stage or progress description.
@@ -50,22 +44,16 @@ class ToolProgress(BaseModel):
     """
 
     type: Literal["tool.progress"] = "tool.progress"
-    stage: Optional[str] = Field(
-        default=None,
-        description="Progress stage description"
-    )
-    data: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Progress metrics"
-    )
+    stage: Optional[str] = Field(default=None, description="Progress stage description")
+    data: Dict[str, Any] = Field(default_factory=dict, description="Progress metrics")
 
 
 class ToolStdout(BaseModel):
     """Frame for standard output lines from tool execution.
-    
+
     Captures tool output (print statements, logs, etc) line by line. Each frame
     represents one newline-terminated line.
-    
+
     Attributes:
         type: Literal "tool.stdout" frame type.
         line: A single line of output (newline may or may not be included).
@@ -77,9 +65,9 @@ class ToolStdout(BaseModel):
 
 class ToolCompleted(BaseModel):
     """Frame emitted when tool execution completes successfully.
-    
+
     Signals successful tool completion and includes the final result value.
-    
+
     Attributes:
         type: Literal "tool.completed" frame type.
         result: The tool's return value (typically a string or dict).
@@ -91,10 +79,10 @@ class ToolCompleted(BaseModel):
 
 class ToolError(BaseModel):
     """Frame emitted when tool execution fails.
-    
+
     Signals a tool error or timeout. Should be the final frame in a failed
     execution sequence.
-    
+
     Attributes:
         type: Literal "tool.error" frame type.
         error: Error message describing the failure.
@@ -110,16 +98,16 @@ ToolFrame = Union[ToolStarted, ToolProgress, ToolStdout, ToolCompleted, ToolErro
 
 def validate_tool_frame(frame: Dict[str, Any]) -> ToolFrame:  # noqa: ANN401
     """Validate and parse a raw tool frame dict into a typed ToolFrame.
-    
+
     Inspects the "type" field of the frame dict and deserializes to the
     appropriate Pydantic model. Unknown frame types are converted to ToolError.
-    
+
     Args:
         frame: Raw frame dictionary from tool runner.
-    
+
     Returns:
         A typed ToolFrame (ToolStarted, ToolProgress, etc).
-    
+
     Example:
         >>> raw = {"type": "tool.completed", "result": "success"}
         >>> typed = validate_tool_frame(raw)
@@ -139,7 +127,6 @@ def validate_tool_frame(frame: Dict[str, Any]) -> ToolFrame:  # noqa: ANN401
         return ToolError.model_validate(frame)
     # Unknown type: map to error
     return ToolError(error=f"unknown frame type: {t}").model_copy()  # type: ignore[return-value]
-
 
 
 __all__ = [

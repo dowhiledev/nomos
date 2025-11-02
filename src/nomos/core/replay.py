@@ -18,24 +18,24 @@ from .state import SessionState
 
 def project_state(session_id: str, events: List[SessionEvent]) -> Dict[str, Any]:  # noqa: ANN401
     """Project session state from a list of events.
-    
+
     Scans events in order and reconstructs the session state at that point.
     This enables deterministic replay: feeding the same events through projection
     always yields the same state.
-    
+
     The function tracks:
     - Current node from ROUTING_APPLIED events
     - Last action type
     - Recent event history (tail of last 50 events)
-    
+
     Args:
         session_id: The session ID being projected.
         events: List of SessionEvent objects in order.
-    
+
     Returns:
         Dictionary representation of SessionState at the end of the event list.
         Use SessionState.model_validate() to get a typed object if needed.
-    
+
     Example:
         >>> events = await store.read_by_session(session_id)
         >>> state_dict = project_state(session_id, events)
@@ -56,7 +56,6 @@ def project_state(session_id: str, events: List[SessionEvent]) -> Dict[str, Any]
             state.current_node = ev.data.get("node_id")
     state.history_tail = tail
     return state.model_dump()
-
 
 
 __all__ = ["project_state"]

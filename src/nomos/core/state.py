@@ -17,17 +17,17 @@ from .schemas import Checkpoint
 
 class SessionState(BaseModel):
     """Materialized state snapshot for a session.
-    
+
     Represents the current state of a session as computed from its event log.
     This model serves as the basis for:
     - Session introspection via REST APIs
     - State-based decision logic
     - Checkpointing for interruption/resume
     - Timeline visualization and debugging
-    
+
     State is typically projected via the replay.project_state() function which
     scans the event log and updates this model based on event types.
-    
+
     Attributes:
         session_id: Unique session identifier.
         current_node: ID of the node the session is currently in (or None).
@@ -36,41 +36,30 @@ class SessionState(BaseModel):
         messages: Conversation message history.
         flow_state: Arbitrary application state (node-specific context).
         checkpoints: List of saved checkpoints for this session.
-    
+
     Example:
         >>> state = project_state(session_id, events)
         >>> print(f"Session {state.session_id} at node {state.current_node}")
         >>> print(f"Last action: {state.last_action}")
     """
 
-    session_id: str = Field(
-        description="Unique session identifier"
-    )
+    session_id: str = Field(description="Unique session identifier")
     current_node: Optional[str] = Field(
-        default=None,
-        description="Current node in the graph"
+        default=None, description="Current node in the graph"
     )
-    last_action: Optional[str] = Field(
-        default=None,
-        description="Type of last action"
-    )
+    last_action: Optional[str] = Field(default=None, description="Type of last action")
     history_tail: List[SessionEvent] = Field(
-        default_factory=list,
-        description="Recent events for context"
+        default_factory=list, description="Recent events for context"
     )
     messages: List[Dict[str, Any]] = Field(
-        default_factory=list,
-        description="Conversation history"
+        default_factory=list, description="Conversation history"
     )
     flow_state: Optional[Dict[str, Any]] = Field(
-        default=None,
-        description="Application-specific state"
+        default=None, description="Application-specific state"
     )
     checkpoints: List[Checkpoint] = Field(
-        default_factory=list,
-        description="Saved checkpoints for this session"
+        default_factory=list, description="Saved checkpoints for this session"
     )
-
 
 
 __all__ = ["SessionState"]

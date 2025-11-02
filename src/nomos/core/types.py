@@ -56,11 +56,11 @@ to the tool's schema definition but allows flexibility for compatibility.
 
 class ToolContext(BaseModel):
     """Context object passed to tool functions during execution.
-    
+
     Provides tools with access to session information, node context, memory,
     and cancellation signals. All fields are optional; tools should defensively
     check for presence using hasattr() or .get() patterns.
-    
+
     Attributes:
         cancel_event: Asyncio Event that signals cancellation request.
             Tools should check this periodically and exit cleanly when set.
@@ -68,7 +68,7 @@ class ToolContext(BaseModel):
         node_id: The ID of the current node in the agent graph (may be None
             if called outside a graph context).
         memory: Optional session memory identifier for accessing persistent state.
-    
+
     Example:
         >>> async def my_tool(ctx: ToolContext) -> str:
         ...     if hasattr(ctx, 'session_id'):
@@ -77,18 +77,13 @@ class ToolContext(BaseModel):
     """
 
     cancel_event: Optional[Any] = Field(
-        default=None,
-        description="Asyncio Event for cancellation signaling"
+        default=None, description="Asyncio Event for cancellation signaling"
     )
     session_id: str = Field(description="Unique session identifier")
     node_id: Optional[str] = Field(
-        default=None,
-        description="Current node ID in the agent graph"
+        default=None, description="Current node ID in the agent graph"
     )
-    memory: Optional[str] = Field(
-        default=None,
-        description="Session memory identifier"
-    )
+    memory: Optional[str] = Field(default=None, description="Session memory identifier")
 
 
 __all__ = [

@@ -14,29 +14,33 @@ back to JSON mode streaming for compatibility.
 
 from __future__ import annotations
 
-from typing import Any, AsyncIterator, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, List, Optional, Union
 import json
 
 from nomos.core.events import EventType, TokenFrame, DecisionFrame
 from nomos.core.schemas import Message, Decision
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from nomos.core.interfaces import LLMProvider
 from nomos.core.types import ProviderSchema, ProviderFrame
+
+if TYPE_CHECKING:
+    from nomos.graph import AgentSpec
+    from openai import AsyncOpenAI
 
 
 def _to_openai_content(parts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:  # noqa: ANN401
     """Convert Nomos content parts to OpenAI message content array.
-    
+
     Transforms rich content structures (text, images, etc) into OpenAI's
     expected message format. Handles unknown types gracefully by falling
     back to text representation.
-    
+
     Args:
         parts: List of content part dicts with 'type' and 'data' fields.
-    
+
     Returns:
         List of OpenAI message content objects.
-    
+
     Example:
         >>> parts = [
         ...     {"type": "text", "data": "Hello"},
@@ -67,16 +71,16 @@ def _to_openai_messages(
     messages: List[Union[Message, Dict[str, Any]]],
 ) -> List[Dict[str, Any]]:  # noqa: ANN401
     """Convert Nomos Message objects to OpenAI message format.
-    
+
     Normalizes mixed Message and dict inputs to a consistent OpenAI format.
     Handles both plain text and multi-part content.
-    
+
     Args:
         messages: List of Message objects or dicts.
-    
+
     Returns:
         List of dicts in OpenAI message format with 'role' and 'content'.
-    
+
     Example:
         >>> msgs = [Message(role="user", content="Hello, OpenAI!")]
         >>> oai_msgs = _to_openai_messages(msgs)
@@ -105,14 +109,14 @@ def _to_openai_messages(
 
 class OpenAI(LLMProvider):
     """OpenAI language model provider adapter.
-    
+
     Implements the LLMProvider protocol using OpenAI's chat completion API.
     Supports both structured outputs (Decision format) and JSON mode streaming.
-    
+
     Attributes:
         model: OpenAI model identifier (default: "gpt-4o-mini").
         client: Optional pre-configured OpenAI client (for testing or custom setup).
-    
+
     Example:
         >>> from openai import OpenAI as OAIClient
         >>> provider = OpenAI(model="gpt-4o", client=OAIClient())
@@ -122,13 +126,16 @@ class OpenAI(LLMProvider):
     """
 
     def __init__(
-        self, *, model: str = "gpt-4o-mini", client: Optional[Any] = None
-    ) -> None:  # noqa: ANN401
+        self,
+        *,
+        model: str = "gpt-4o-mini",
+        client: Optional[AsyncOpenAI] = None,
+    ) -> None:
         """Initialize the OpenAI provider.
-        
+
         Args:
             model: OpenAI model ID to use (e.g., "gpt-4o", "gpt-4o-mini").
-            client: Optional OpenAI client instance. If not provided, creates
+            client: Optional OpenAI AsyncOpenAI client instance. If not provided, creates
                 one lazily on first use (requires OPENAI_API_KEY env var).
         """
         self._model = model
@@ -136,28 +143,28 @@ class OpenAI(LLMProvider):
 
     def build_decision_messages(
         self,
-        agent_spec: Any,  # AgentSpec - type: ignore for circular imports
+        agent_spec: AgentSpec,
         current_node_id: str,
         allowed_tools: List[str],
         base_messages: List[Union[Message, Dict[str, Any]]],
     ) -> List[Union[Message, Dict[str, Any]]]:
         """Build context-aware messages for decision-making.
-        
+
         Constructs a complete message list by prepending system prompts that explain:
         - The agent's role and decision-making format
         - Current node instructions
         - Available routing options (next nodes)
         - Available tools
-        
+
         Args:
             agent_spec: Compiled AgentSpec with nodes and edges.
             current_node_id: Current node ID for routing context.
             allowed_tools: List of available tool names.
             base_messages: Existing message history to append instructions to.
-        
+
         Returns:
             Complete message list with system prompts prepended.
-        
+
         Example:
             >>> spec = AgentSpec(...)
             >>> msgs = [Message(role="user", content="Hello")]
@@ -235,28 +242,28 @@ class OpenAI(LLMProvider):
         self, messages: List[Union[Message, Dict[str, Any]]], schema: ProviderSchema
     ) -> AsyncIterator[ProviderFrame]:
         """Stream decision frames from OpenAI chat completions.
-        
+
         Attempts to use structured outputs (Decision format) first, then falls back
         to JSON mode streaming. Streams:
         - TokenFrame: Individual token emissions during generation
         - DecisionFrame: Final decision with action (RESPOND, TOOL_CALL, or MOVE)
-        
+
         The method intelligently parses:
         - Structured Decision responses
         - Tool/function calls from streaming deltas
         - Fallback JSON responses
         - Raw text responses
-        
+
         Args:
             messages: Complete message list for decision context.
             schema: Optional response schema (Pydantic model or mapping).
-        
+
         Yields:
             TokenFrame and DecisionFrame objects.
-        
+
         Raises:
             RuntimeError: If OpenAI client not available and can't be created.
-        
+
         Example:
             >>> messages = [Message(role="user", content="What next?")]
             >>> async for frame in provider.stream_decision(messages, schema=None):
@@ -264,12 +271,12 @@ class OpenAI(LLMProvider):
         """
         # If a test client is provided that exposes a `chat.completions.create` streaming iterator,
         # use it; otherwise attempt to create a default OpenAI client lazily.
-        client = self._client
+        client: AsyncOpenAI | None = self._client
         if client is None:
             try:
-                from openai import OpenAI  # type: ignore
+                from openai import AsyncOpenAI as AsyncOpenAIClient
 
-                client = OpenAI()
+                client = AsyncOpenAIClient()
             except Exception as exc:  # pragma: no cover - optional dependency
                 raise RuntimeError(
                     "OpenAI client not available; install 'openai' extra"
@@ -319,8 +326,8 @@ class OpenAI(LLMProvider):
             try:
                 choice = chunk.choices[0]
                 delta = getattr(choice, "delta", None)
-                if delta is None:
-                    delta = choice.get("delta")  # type: ignore[attr-defined]
+                if delta is None and isinstance(choice, dict):
+                    delta = choice.get("delta")
             except Exception:  # pragma: no cover - tolerate shape variance
                 delta = None
 
@@ -428,16 +435,16 @@ class OpenAI(LLMProvider):
         self, messages: List[Union[Message, Dict[str, Any]]]
     ) -> AsyncIterator[ProviderFrame]:
         """Stream text generation without decision logic.
-        
+
         Used for pure text generation (e.g., final responses, generation tasks).
         Yields only TokenFrame objects (no DecisionFrame).
-        
+
         Args:
             messages: Message list for generation context.
-        
+
         Yields:
             TokenFrame objects for streaming text output.
-        
+
         Example:
             >>> msgs = [Message(role="user", content="Write a poem")]
             >>> async for frame in provider.stream_generate(msgs):
@@ -445,7 +452,7 @@ class OpenAI(LLMProvider):
             ...         print(frame["data"]["delta"], end="")
         """
         # Implement in terms of stream_decision and pass through token events only
-        async for frame in self.stream_decision(messages, schema=None):  # type: ignore[arg-type]
+        async for frame in self.stream_decision(messages, schema=None):
             if frame.get("type") == EventType.TOKEN_EMITTED:
                 yield frame
 

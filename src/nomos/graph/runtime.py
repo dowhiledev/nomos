@@ -23,11 +23,11 @@ from .spec import AgentSpec, NodeSpec, EdgeSpec, compile_agent
 
 class Step(BaseModel):
     """A node in the graph with optional LLM and tool configuration.
-    
+
     Represents a decision or action point in the agent's workflow. Steps can
     have node-specific LLM overrides, tool availability restrictions, and memory
     configuration.
-    
+
     Attributes:
         id: Unique step identifier.
         prompt: Optional instruction for the LLM at this step.
@@ -35,7 +35,7 @@ class Step(BaseModel):
         tools: Optional list of available tool callables (decorated functions).
             Can be Python functions decorated with @tool or plain callables.
         memory: Optional memory identifier for retrieving context at this step.
-    
+
     Example:
         >>> step = Step(
         ...     id="analyze",
@@ -45,35 +45,25 @@ class Step(BaseModel):
     """
 
     id: str = Field(description="Unique step identifier")
-    prompt: Optional[str] = Field(
-        default=None,
-        description="LLM instruction prompt"
-    )
-    llm: Optional[str] = Field(
-        default=None,
-        description="LLM provider override"
-    )
+    prompt: Optional[str] = Field(default=None, description="LLM instruction prompt")
+    llm: Optional[str] = Field(default=None, description="LLM provider override")
     tools: Optional[List[object]] = Field(
-        default=None,
-        description="Available tool callables"
+        default=None, description="Available tool callables"
     )
-    memory: Optional[str] = Field(
-        default=None,
-        description="Memory context identifier"
-    )
+    memory: Optional[str] = Field(default=None, description="Memory context identifier")
 
 
 class Transition(BaseModel):
     """A routing edge between steps.
-    
+
     Represents a possible transition from one step to another. The "when"
     condition is a natural-language description shown to the LLM.
-    
+
     Attributes:
         from_id: Source step ID.
         to_id: Target step ID.
         when: Natural-language condition for this transition.
-    
+
     Example:
         >>> trans = Transition(
         ...     from_id="analyze",
@@ -84,25 +74,22 @@ class Transition(BaseModel):
 
     from_id: str = Field(description="Source step ID")
     to_id: str = Field(description="Target step ID")
-    when: Optional[str] = Field(
-        default=None,
-        description="Transition condition"
-    )
+    when: Optional[str] = Field(default=None, description="Transition condition")
 
 
 class Graph(BaseModel):
     """High-level graph builder supporting Python and YAML definition.
-    
+
     Provides a fluent API for constructing agent graphs, with support for:
     - Programmatic building via node() and edge()
     - YAML loading via from_yaml()
     - Compilation to AgentSpec for the orchestrator
-    
+
     Attributes:
         name: Graph name.
         llm: Optional default LLM provider for all steps.
         memory: Optional memory configuration identifier.
-    
+
     Example:
         >>> graph = Graph(name="assistant")
         >>> graph.node(Step(id="start", prompt="Start"))
@@ -112,14 +99,8 @@ class Graph(BaseModel):
     """
 
     name: str = Field(description="Graph name")
-    llm: Optional[str] = Field(
-        default=None,
-        description="Default LLM provider"
-    )
-    memory: Optional[str] = Field(
-        default=None,
-        description="Memory configuration"
-    )
+    llm: Optional[str] = Field(default=None, description="Default LLM provider")
+    memory: Optional[str] = Field(default=None, description="Memory configuration")
     _nodes: List[Step] = PrivateAttr(default_factory=list)
     _edges: List[Transition] = PrivateAttr(default_factory=list)
     _start: Optional[str] = PrivateAttr(default=None)
@@ -128,12 +109,12 @@ class Graph(BaseModel):
 
     def node(self, step: Step) -> "Graph":
         """Add a step to the graph.
-        
+
         The first step added becomes the start node if not already set.
-        
+
         Args:
             step: Step object to add.
-        
+
         Returns:
             Self for method chaining.
         """
@@ -144,13 +125,13 @@ class Graph(BaseModel):
 
     def add(self, *items: Union[Step, Transition]) -> "Graph":
         """Add one or more steps and/or transitions.
-        
+
         Handles mixed Step and Transition objects in a single call.
         The first Step added becomes the start if not already set.
-        
+
         Args:
             *items: Variable number of Step and/or Transition objects.
-        
+
         Returns:
             Self for method chaining.
         """
@@ -165,10 +146,10 @@ class Graph(BaseModel):
 
     def edge(self, e: Transition) -> "Graph":
         """Add a transition (routing edge).
-        
+
         Args:
             e: Transition object.
-        
+
         Returns:
             Self for method chaining.
         """
@@ -178,10 +159,10 @@ class Graph(BaseModel):
     @classmethod
     def from_yaml(cls, yaml_path: Union[str, Path]) -> "Graph":
         """Load a graph from a YAML configuration file.
-        
+
         The YAML should define steps with their prompts, tools, and transitions.
         Tools are referenced by name (must be registered separately in Python).
-        
+
         YAML Structure:
             name: graph name
             entry_point: starting step id
@@ -195,17 +176,17 @@ class Graph(BaseModel):
                     transitions:
                         - to: target_step_id
                           when: condition text
-        
+
         Args:
             yaml_path: Path to YAML configuration file.
-        
+
         Returns:
             Loaded Graph instance.
-        
+
         Raises:
             FileNotFoundError: If YAML file doesn't exist.
             KeyError: If YAML structure is invalid.
-        
+
         Example:
             >>> graph = Graph.from_yaml("agent.yaml")
             >>> spec = graph.compile()
@@ -257,16 +238,16 @@ class Graph(BaseModel):
 
     def compile(self) -> AgentSpec:
         """Compile the graph into an AgentSpec.
-        
+
         Converts Steps and Transitions to NodeSpec and EdgeSpec respectively,
         then validates the resulting specification.
-        
+
         Returns:
             Compiled AgentSpec ready for the orchestrator.
-        
+
         Raises:
             ValueError: If no start node is set or graph is invalid.
-        
+
         Example:
             >>> graph = Graph(name="bot")
             >>> graph.node(Step(id="start"))
@@ -286,7 +267,6 @@ class Graph(BaseModel):
             ],
         )
         return compile_agent(spec)
-
 
 
 __all__ = ["Graph", "Step", "Transition"]

@@ -18,17 +18,17 @@ from pydantic import BaseModel, Field
 
 class NodeSpec(BaseModel):
     """Specification for a single node (step) in the agent graph.
-    
+
     Represents a decision point or action node where the LLM receives instructions
     and makes decisions about the next step.
-    
+
     Attributes:
         id: Unique node identifier within the graph.
         prompt: Natural language instruction for the LLM at this node.
             If not provided, uses defaults from AgentSpec or LLM provider.
         tools: List of tool names available at this node (optional).
             If not specified, all tools are potentially available.
-    
+
     Example:
         >>> node = NodeSpec(
         ...     id="gather_requirements",
@@ -39,28 +39,26 @@ class NodeSpec(BaseModel):
 
     id: str = Field(description="Unique node identifier")
     prompt: Optional[str] = Field(
-        default=None,
-        description="LLM instruction prompt for this node"
+        default=None, description="LLM instruction prompt for this node"
     )
     tools: Optional[List[str]] = Field(
-        default=None,
-        description="Available tool names at this node"
+        default=None, description="Available tool names at this node"
     )
 
 
 class EdgeSpec(BaseModel):
     """Specification for a transition between nodes.
-    
+
     Represents a possible routing from one node to another. The condition is
     a natural-language description shown to the LLM as a routing option.
     The runtime validates decisions against allowed targets only.
-    
+
     Attributes:
         from_id: Source node ID.
         to_id: Target node ID.
         condition: Natural-language condition for this transition.
             Shown to the LLM to help it decide whether to take this edge.
-    
+
     Example:
         >>> edge = EdgeSpec(
         ...     from_id="gather_requirements",
@@ -72,29 +70,28 @@ class EdgeSpec(BaseModel):
     from_id: str = Field(description="Source node ID")
     to_id: str = Field(description="Target node ID")
     condition: Optional[str] = Field(
-        default=None,
-        description="Natural-language routing condition"
+        default=None, description="Natural-language routing condition"
     )
 
 
 class AgentSpec(BaseModel):
     """Complete specification for an agent graph.
-    
+
     The canonical specification that gets passed to the orchestrator. Includes
     all nodes and edges, plus methods for validation and routing logic.
-    
+
     The orchestrator uses AgentSpec to:
     - Determine starting node
     - Apply routing decisions (validate MOVE targets)
     - Look up node-specific configuration and tools
     - Validate graph connectivity
-    
+
     Attributes:
         name: Human-readable graph name for debugging.
         start: ID of the starting node.
         nodes: List of all NodeSpec definitions.
         edges: List of all EdgeSpec definitions.
-    
+
     Example:
         >>> spec = AgentSpec(
         ...     name="support_agent",
@@ -117,10 +114,10 @@ class AgentSpec(BaseModel):
 
     def allowed_targets(self, current: str) -> List[str]:
         """Get valid routing targets from a node.
-        
+
         Args:
             current: Current node ID.
-        
+
         Returns:
             List of node IDs reachable via outgoing edges.
         """
@@ -128,10 +125,10 @@ class AgentSpec(BaseModel):
 
     def get_node_tools(self, node_id: str) -> List[str]:
         """Get tools available at a specific node.
-        
+
         Args:
             node_id: Node identifier.
-        
+
         Returns:
             List of tool names available at this node (empty if unrestricted).
         """
@@ -142,14 +139,14 @@ class AgentSpec(BaseModel):
 
     def route(self, current: str, decision: dict) -> Optional[str]:  # noqa: ANN001
         """Validate and apply a routing decision.
-        
+
         Checks if a MOVE decision is valid (target in allowed_targets).
         Returns the target node ID if valid, None otherwise.
-        
+
         Args:
             current: Current node ID.
             decision: Decision dict (typically with 'action' and 'step_id' keys).
-        
+
         Returns:
             Target node ID if valid MOVE, None otherwise.
         """
@@ -162,13 +159,13 @@ class AgentSpec(BaseModel):
 
     def validate_spec(self) -> None:
         """Validate the graph specification for correctness.
-        
+
         Checks:
         - Start node exists
         - All edge endpoints exist in nodes
         - No duplicate edges
         - All nodes are reachable from start (no orphaned nodes)
-        
+
         Raises:
             ValueError: If validation fails with descriptive message.
         """
@@ -206,25 +203,18 @@ class AgentSpec(BaseModel):
 
 def compile_agent(spec: AgentSpec) -> AgentSpec:
     """Compile an agent specification (validates and returns).
-    
+
     Currently a pass-through that validates the spec.
     In future, could perform optimizations or transformations.
-    
+
     Args:
         spec: AgentSpec to compile.
-    
+
     Returns:
         The same spec (after validation).
-    
+
     Raises:
         ValueError: If spec is invalid.
     """
-    spec.validate_spec()
-    return spec
-
-
-
-def compile_agent(spec: AgentSpec) -> AgentSpec:
-    """Validate and return the spec (placeholder for future transforms)."""
     spec.validate_spec()
     return spec
