@@ -1,7 +1,13 @@
-"""Redaction utilities for event payloads.
+"""Redaction utilities for sensitive data in events and logs.
 
-Provides a simple deep redaction helper with a default set of sensitive keys.
-Redaction is opt-in and applied by the orchestrator when configured.
+This module provides helpers for redacting sensitive information from event payloads,
+logs, and stored data. Redaction is opt-in and applied by the orchestrator when
+configured, protecting secrets while preserving event auditability.
+
+Supports:
+- Recursive redaction of nested structures (dicts and lists)
+- Customizable sensitive key lists
+- Configurable masking strings (default "***")
 """
 
 from __future__ import annotations
@@ -17,6 +23,11 @@ DEFAULT_SENSITIVE_KEYS = {
     "secret",
     "password",
 }
+"""Default set of keys considered sensitive.
+
+These are commonly targeted attack vectors. Additional keys can be specified
+per-call via the sensitive_keys parameter.
+"""
 
 
 def redact_mapping(
@@ -25,10 +36,37 @@ def redact_mapping(
     sensitive_keys: Iterable[str] | None = None,
     mask: str = "***",
 ) -> Dict[str, Any]:
-    """Return a redacted copy of the mapping, masking sensitive keys recursively.
-
-    - Handles nested dicts and lists.
-    - Leaves non-dict/list values as-is.
+    """Return a redacted copy of a mapping with sensitive values masked.
+    
+    Recursively traverses the mapping and replaces values for sensitive keys
+    with the mask string. Preserves all other data unchanged. Works with nested
+    dicts and lists.
+    
+    Args:
+        obj: The input mapping (dict-like) to redact.
+        sensitive_keys: Set of key names to redact. Defaults to DEFAULT_SENSITIVE_KEYS.
+            Keys are case-insensitive.
+        mask: String to use for masking sensitive values (default "***").
+    
+    Returns:
+        A new dict with sensitive values masked. The input obj is not modified.
+    
+    Raises:
+        None. Function is defensive and won't crash on unexpected types.
+    
+    Example:
+        >>> data = {
+        ...     "username": "alice",
+        ...     "api_key": "secret123",
+        ...     "nested": {"token": "xyz"}
+        ... }
+        >>> redacted = redact_mapping(data)
+        >>> redacted["api_key"]
+        "***"
+        >>> redacted["nested"]["token"]
+        "***"
+        >>> redacted["username"]
+        "alice"
     """
     keys = set((sensitive_keys or DEFAULT_SENSITIVE_KEYS))
 
@@ -42,6 +80,7 @@ def redact_mapping(
         return value
 
     return _redact(dict(obj))
+
 
 
 __all__ = ["redact_mapping", "DEFAULT_SENSITIVE_KEYS"]
