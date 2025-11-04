@@ -58,7 +58,7 @@ runner = SimpleToolRunner()
 
 # Tools
 @runner.tool("get.options")
-def get_available_coffee_options() -> list[dict]:
+async def get_available_coffee_options() -> list[dict]:
     """Retrieve available coffee options, sizes, and prices.
 
     Returns a structured list of available beverages with their size options
@@ -128,7 +128,7 @@ async def add_to_cart(coffee_type: str, size: str) -> str:
     """
     global _cart
     item_id = str(uuid.uuid4())
-    coffee_options = get_available_coffee_options()
+    coffee_options = await get_available_coffee_options()
     assert coffee_type in [opt["type"] for opt in coffee_options], "Invalid coffee type"
     assert size in ["Small", "Medium", "Large"], "Invalid size"
     price = next(
