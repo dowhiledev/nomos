@@ -70,7 +70,8 @@ class Message(BaseModel):
 
     Attributes:
         role: Message origin - "user" (input), "assistant" (model response),
-            or "system" (instructions/context).
+            "system" (instructions/context), "tool_call" (tool invocation),
+            "tool_output" (tool result), or "tool_error" (tool failure).
         content: Message body - either plain text or a list of content parts.
 
     Example:
@@ -84,12 +85,82 @@ class Message(BaseModel):
         ... )
     """
 
-    role: Literal["user", "assistant", "system"] = Field(
-        description="Message originator role"
-    )
+    role: Literal[
+        "user", "assistant", "system", "tool_call", "tool_output", "tool_error"
+    ] = Field(description="Message originator role")
     content: Union[str, List[ContentPart]] = Field(
         description="Message body (text or content parts)"
     )
+
+    @classmethod
+    def tool_call_message(
+        cls, tool_name: str, tool_kwargs: Dict[str, Any]
+    ) -> "Message":
+        """Create a tool call message.
+
+        Convenience constructor for messages representing tool invocations.
+
+        Args:
+            tool_name: Name of the tool being called.
+            tool_kwargs: Arguments passed to the tool.
+
+        Returns:
+            Message with role="tool_call" and formatted content.
+
+        Example:
+            >>> msg = Message.tool_call_message("weather.get", {"location": "NYC"})
+            >>> msg.role
+            "tool_call"
+        """
+        import json
+
+        content = f"TOOL_CALL {tool_name}: {json.dumps(tool_kwargs)}"
+        return cls(role="tool_call", content=content)
+
+    @classmethod
+    def tool_output_message(cls, tool_name: str, result: Any) -> "Message":
+        """Create a tool output message.
+
+        Convenience constructor for messages representing successful tool results.
+
+        Args:
+            tool_name: Name of the tool that was executed.
+            result: The result returned by the tool.
+
+        Returns:
+            Message with role="tool_output" and formatted content.
+
+        Example:
+            >>> msg = Message.tool_output_message("weather.get", {"temp": 72})
+            >>> msg.role
+            "tool_output"
+        """
+        import json
+
+        result_str = json.dumps(result) if not isinstance(result, str) else result
+        content = f"TOOL_OUTPUT {tool_name}: {result_str[:1000]}"
+        return cls(role="tool_output", content=content)
+
+    @classmethod
+    def tool_error_message(cls, tool_name: str, error: str) -> "Message":
+        """Create a tool error message.
+
+        Convenience constructor for messages representing tool execution failures.
+
+        Args:
+            tool_name: Name of the tool that failed.
+            error: Error message or description.
+
+        Returns:
+            Message with role="tool_error" and formatted content.
+
+        Example:
+            >>> msg = Message.tool_error_message("weather.get", "API timeout")
+            >>> msg.role
+            "tool_error"
+        """
+        content = f"TOOL_ERROR {tool_name}: {error}"
+        return cls(role="tool_error", content=content)
 
 
 class ToolCall(BaseModel):

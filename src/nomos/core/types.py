@@ -26,31 +26,27 @@ Can be either:
 - None if no schema validation is needed
 """
 
-# Frames emitted by providers (transition: dict allowed for adapter compatibility)
-ProviderFrame: TypeAlias = Union[DecisionFrame, TokenFrame, Dict[str, Any]]
+# Frames emitted by providers
+ProviderFrame: TypeAlias = Union[DecisionFrame, TokenFrame]
 """Type alias for frames streamed from LLM providers.
 
 Represents streaming responses from language models. Includes:
 - DecisionFrame: Final decision from the provider (RESPOND, TOOL_CALL, or MOVE)
 - TokenFrame: Individual token emissions during streaming
-- Dict[str, Any]: Compatibility fallback for adapter implementations
 """
 
-# Frames emitted by tools (supports dict for compatibility)
-ToolFrameUnion: TypeAlias = Union[ToolFrame, Dict[str, Any]]
+# Frames emitted by tools
+ToolFrameUnion: TypeAlias = ToolFrame
 """Type alias for frames emitted by tool execution.
 
-Includes:
-- ToolFrame: Typed tool execution frames (started, progress, stdout, completed, error)
-- Dict[str, Any]: Compatibility fallback for custom tool implementations
+Typed tool execution frames (started, progress, stdout, completed, error).
 """
 
 # Tool arguments passed to tool runners
 ToolArgs: TypeAlias = Dict[str, Any]
 """Type alias for tool invocation arguments.
 
-A dictionary of keyword arguments passed to tool functions. Should correspond
-to the tool's schema definition but allows flexibility for compatibility.
+A dictionary of keyword arguments passed to tool functions.
 """
 
 

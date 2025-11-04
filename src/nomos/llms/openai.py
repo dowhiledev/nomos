@@ -9,7 +9,7 @@ It handles:
 - Fallback handling for different OpenAI API modes
 
 The adapter prefers structured outputs (via response_format=Decision) but falls
-back to JSON mode streaming for compatibility.
+back to JSON mode streaming when structured outputs are not available.
 """
 
 from __future__ import annotations
@@ -89,7 +89,8 @@ def _to_openai_messages(
     """Convert Nomos Message objects to OpenAI message format.
 
     Normalizes mixed Message and dict inputs to a consistent OpenAI format.
-    Handles both plain text and multi-part content.
+    Handles both plain text and multi-part content. Maps Nomos-specific roles
+    (tool_call, tool_output, tool_error) to OpenAI's expected roles.
 
     Args:
         messages: List of Message objects or dicts.
@@ -113,13 +114,24 @@ def _to_openai_messages(
             m = Message.model_validate(m)
         role = m.role
         content = m.content
+
+        # Map Nomos tool-specific roles to OpenAI format
+        # tool_call -> assistant (the assistant decided to call a tool)
+        # tool_output -> user (the result is information from the system, like user input)
+        # tool_error -> user (errors are also system feedback)
+        openai_role = role
+        if role == "tool_call":
+            openai_role = "assistant"
+        elif role in ("tool_output", "tool_error"):
+            openai_role = "user"
+
         if isinstance(content, list):
             raw_parts = [
                 c.model_dump() if hasattr(c, "model_dump") else c for c in content
             ]
-            oai.append({"role": role, "content": _to_openai_content(raw_parts)})
+            oai.append({"role": openai_role, "content": _to_openai_content(raw_parts)})
         else:
-            oai.append({"role": role, "content": content})
+            oai.append({"role": openai_role, "content": content})
     return oai
 
 
@@ -161,7 +173,7 @@ class OpenAI(LLMProvider):
         self,
         agent_spec: AgentSpec,
         current_node_id: str,
-        allowed_tools: List[str],
+        available_tools: Dict[str, Any],
         base_messages: List[Union[Message, Dict[str, Any]]],
     ) -> List[Union[Message, Dict[str, Any]]]:
         """Build context-aware messages for decision-making.
@@ -170,12 +182,15 @@ class OpenAI(LLMProvider):
         - The agent's role and decision-making format
         - Current node instructions
         - Available routing options (next nodes)
-        - Available tools
+        - Available tools with detailed descriptions and parameter schemas
+
+        The available_tools dict contains ToolSpec objects with full metadata,
+        allowing rich tool documentation in the system prompt.
 
         Args:
             agent_spec: Compiled AgentSpec with nodes and edges.
             current_node_id: Current node ID for routing context.
-            allowed_tools: List of available tool names.
+            available_tools: Dict mapping tool names to ToolSpec objects with metadata.
             base_messages: Existing message history to append instructions to.
 
         Returns:
@@ -183,8 +198,9 @@ class OpenAI(LLMProvider):
 
         Example:
             >>> spec = AgentSpec(...)
+            >>> tools = runner.get_tools()  # Dict[str, ToolSpec]
             >>> msgs = [Message(role="user", content="Hello")]
-            >>> result = provider.build_decision_messages(spec, "start", ["tool1"], msgs)
+            >>> result = provider.build_decision_messages(spec, "start", tools, msgs)
             >>> result[0]["role"]
             "system"
         """
@@ -209,10 +225,34 @@ class OpenAI(LLMProvider):
             routes_desc.append(f"- if '{condition}' then -> {edge.to_id}")
         routes_txt = "\n".join(routes_desc)
 
-        # Build tools description (basic for now, since we don't have tool objects)
+        # Build tools description with full metadata
         tools_desc = []
-        for tool_name in allowed_tools:
-            tools_desc.append(f"- {tool_name}")
+        for tool_name, tool_spec in available_tools.items():
+            # Format: tool_name: description
+            # Then include JSON schema for parameters
+            desc_line = f"- {tool_name}"
+            if tool_spec.description:
+                desc_line += f": {tool_spec.description}"
+            tools_desc.append(desc_line)
+
+            # Include parameter schema with defaults
+            try:
+                params_info = tool_spec.get_params_info()
+                if params_info:
+                    param_parts = []
+                    for pname, pinfo in params_info.items():
+                        ptype = pinfo.get("type", "unknown")
+                        param_str = f"{pname} ({ptype})"
+                        # Add default if present
+                        if "default" in pinfo:
+                            param_str += f" = {pinfo['default']}"
+                        param_parts.append(param_str)
+                    params_str = ", ".join(param_parts)
+                    tools_desc.append(f"  Parameters: {params_str}")
+            except Exception:
+                # If schema extraction fails, skip detailed params
+                pass
+
         tools_txt = "\n".join(tools_desc)
 
         # Build system message
@@ -318,7 +358,7 @@ class OpenAI(LLMProvider):
             # Fallback to streaming JSON mode
             pass
 
-        # Fallback for streaming JSON mode (legacy behavior)
+        # Fallback for streaming JSON mode
         # Aggregate the full text to yield a final decision
         full_text: List[str] = []
         tool_calls: Dict[int, Dict[str, Any]] = {}

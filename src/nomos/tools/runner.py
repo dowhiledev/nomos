@@ -2,47 +2,37 @@
 
 SimpleToolRunner is the primary implementation of the ToolRunner protocol.
 It provides:
-- Function registration via decorator or registry
+- Function registration via decorator or ToolSpec registry
 - Parameter schema validation via Pydantic
 - Multiple execution modes (inline, thread, process)
 - Timeout and cancellation support
 - Event streaming for execution progress
+- Tool introspection via get_tools() returning ToolSpec objects
 """
 
 from __future__ import annotations
 
 import asyncio
+import functools
 import inspect
-from dataclasses import dataclass
-from typing import Any, AsyncIterator, Callable, Dict, List, Optional
+from typing import Any, AsyncIterator, Callable, Dict, List
 from concurrent.futures import ProcessPoolExecutor
 
 from pydantic import BaseModel, create_model
 
 from nomos.core.interfaces import ToolRunner
-from nomos.core.tool_events import validate_tool_frame
 from nomos.core.types import ToolFrameUnion, ToolArgs
+from nomos.core.tool_events import (
+    ToolStarted,
+    ToolCompleted,
+    ToolError,
+    validate_tool_frame,
+)
+from .spec import ToolSpec
 
 
 ToolCallable = Callable[..., Any]
 """Type alias for tool functions."""
-
-
-@dataclass
-class ToolInfo:
-    """Metadata for a registered tool.
-
-    Attributes:
-        func: The tool function (sync or async).
-        schema: Pydantic model for parameter validation.
-        timeout: Optional per-tool timeout in seconds.
-        description: Tool description from docstring.
-    """
-
-    func: ToolCallable
-    schema: type[BaseModel]
-    timeout: Optional[float]
-    description: str
 
 
 class ToolExecutionContext:
@@ -140,11 +130,6 @@ def _create_tool_schema(func: Callable[..., Any], name: str) -> type[BaseModel]:
     return create_model(f"{name}Args", **fields)
 
 
-def _call_sync(fn: ToolCallable, kwargs: Dict[str, Any]) -> Any:  # noqa: ANN401
-    """Call a sync function with kwargs (for process pool executor)."""
-    return fn(**kwargs)
-
-
 class SimpleToolRunner(ToolRunner):
     """Simple implementation of ToolRunner protocol.
 
@@ -172,51 +157,47 @@ class SimpleToolRunner(ToolRunner):
         registry: Dict[str, ToolCallable] | None = None,
         *,
         timeout_s: float | None = None,
-        allowed_tools: set[str] | None = None,
         execution_mode: str = "inline",  # inline | thread | process
         processes: int | None = None,
     ) -> None:
         """Initialize the tool runner.
 
         Args:
-            registry: Optional dict of {tool_name: callable} for backward compatibility.
+            registry: Optional dict of {tool_name: ToolSpec}.
             timeout_s: Default timeout in seconds for all tools.
-            allowed_tools: Optional set of tool names to allow (ACL).
-                If set, only tools in this set can be executed.
             execution_mode: How to execute functions:
                 - "inline": Run synchronously in event loop
                 - "thread": Run in thread pool
                 - "process": Run in process pool
             processes: Number of processes for "process" mode (default: auto).
         """
-        self._registry: Dict[str, ToolInfo] = {}
+        self._registry: Dict[str, ToolSpec] = {}
         self._timeout = timeout_s
-        self._allowed = allowed_tools
         self._exec_mode = execution_mode
+        self._processes = processes
         self._proc_pool: ProcessPoolExecutor | None = None
-        if self._exec_mode == "process":
-            self._proc_pool = ProcessPoolExecutor(max_workers=processes)
 
-        # Backward compatibility: if registry provided, populate from old format
         if registry:
-            for name, func in registry.items():
-                schema = _create_tool_schema(func, name)
-                description = func.__doc__ or ""
-                timeout = getattr(func, "__tool_timeout__", None)
-                self._registry[name] = ToolInfo(
-                    func=func,
-                    schema=schema,
-                    timeout=timeout,
-                    description=description.strip(),
-                )
+            for name, tool_spec in registry.items():
+                if not isinstance(tool_spec, ToolSpec):
+                    raise TypeError(
+                        f"Registry must contain ToolSpec objects, got {type(tool_spec)}"
+                    )
+                self._registry[name] = tool_spec
 
     def tool(
-        self, name: str | None = None, *, timeout: float | None = None
+        self,
+        name: str | None = None,
+        *,
+        description: str | None = None,
+        timeout: float | None = None,
     ) -> Callable[[ToolCallable], ToolCallable]:
         """Decorator to register a tool function.
 
         Args:
             name: Tool name (defaults to function name).
+            description: Optional tool description. If not provided, uses the first
+                paragraph of the function's docstring.
             timeout: Per-tool timeout in seconds (overrides runner default).
 
         Returns:
@@ -225,28 +206,62 @@ class SimpleToolRunner(ToolRunner):
         Example:
             >>> @runner.tool("greet", timeout=5.0)
             ... async def greet(name: str) -> str:
+            ...     \"\"\"Greet someone.\"\"\"
             ...     return f"Hello, {name}!"
         """
 
         def decorator(func: ToolCallable) -> ToolCallable:
             tool_name = name or func.__name__
             schema = _create_tool_schema(func, tool_name)
-            description = func.__doc__ or ""
 
-            self._registry[tool_name] = ToolInfo(
+            # Use provided description, or extract first paragraph from docstring
+            if description is not None:
+                tool_description = description
+            else:
+                doc = func.__doc__ or ""
+                # Extract first paragraph (text before first double newline or end of string)
+                first_paragraph = doc.split("\n\n")[0].strip()
+                tool_description = first_paragraph
+
+            self._registry[tool_name] = ToolSpec(
+                name=tool_name,
                 func=func,
                 schema=schema,
                 timeout=timeout,
-                description=description.strip(),
+                description=tool_description,
             )
-
-            # Set metadata for backward compatibility
-            setattr(func, "__tool_name__", tool_name)
-            setattr(func, "__tool_timeout__", timeout)
 
             return func
 
         return decorator
+
+    def get_tools(self) -> Dict[str, ToolSpec]:
+        """Get all registered tools with full metadata.
+
+        Returns a dict mapping tool names to ToolSpec objects, enabling
+        providers and other components to access tool information including
+        name, description, schema, timeout, and permissions.
+
+        This method is exposed via the ToolRunner protocol and is used by
+        LLM providers to build context-aware prompts with tool schemas
+        and descriptions.
+
+        Returns:
+            Dict mapping tool names (str) to ToolSpec objects.
+
+        Example:
+            >>> runner = SimpleToolRunner()
+            >>> @runner.tool("greet")
+            ... def greet(name: str) -> str:
+            ...     \"\"\"Greet someone.\"\"\"
+            ...     return f"Hello, {name}!"
+            >>> tools = runner.get_tools()
+            >>> tools["greet"].description
+            "Greet someone."
+            >>> tools["greet"].get_args_json_schema()
+            {"type": "object", "properties": {"name": {...}}, ...}
+        """
+        return self._registry.copy()
 
     async def run(
         self, tool_name: str, args: ToolArgs, ctx: Dict[str, Any]
@@ -269,88 +284,42 @@ class SimpleToolRunner(ToolRunner):
             ...     if frame["type"] == "tool.completed":
             ...         print(f"Result: {frame['result']}")
         """
-        # ACL check
-        if self._allowed is not None and tool_name not in self._allowed:
-            yield {"type": "tool.error", "tool": tool_name, "error": "unauthorized"}
-            return
-
-        tool_info = self._registry.get(tool_name)
-        if not tool_info:
-            yield {"type": "tool.error", "tool": tool_name, "error": "unknown tool"}
+        tool_spec = self._registry.get(tool_name)
+        if not tool_spec:
+            yield ToolError(error="unknown tool")
             return
 
         # Validate args against schema
         try:
-            validated_args = tool_info.schema(**args)
+            validated_args = tool_spec.schema(**args)
             call_kwargs = validated_args.model_dump()
         except Exception as e:
-            yield {
-                "type": "tool.error",
-                "tool": tool_name,
-                "error": f"invalid args: {e}",
-            }
+            yield ToolError(error=f"invalid args: {e}")
             return
 
         # Emit started
-        yield {"type": "tool.started", "tool": tool_name}
+        yield ToolStarted(tool=tool_name)
 
-        fn = tool_info.func
-
-        # Backward compatibility: if async generator, use old behavior
-        if inspect.isasyncgenfunction(fn):
-
-            async def _execute_old_style():
-                # Add ctx if function accepts it
-                sig = inspect.signature(fn)
-                if "ctx" in sig.parameters:
-                    call_kwargs["ctx"] = ctx
-
-                res = fn(**call_kwargs)
-                async for frame in res:
-                    try:
-                        fr = validate_tool_frame(frame)
-                        yield fr.model_dump()
-                    except Exception:
-                        yield {
-                            "type": "tool.error",
-                            "tool": tool_name,
-                            "error": "invalid frame",
-                        }
-
-            # adopt per-tool timeout
-            timeout = tool_info.timeout or self._timeout
-            if timeout:
-                agen = _execute_old_style()
-                try:
-                    async for frame in _iterate_with_timeout(agen, timeout):
-                        yield frame
-                except asyncio.TimeoutError:
-                    yield {"type": "tool.error", "tool": tool_name, "error": "timeout"}
-            else:
-                async for frame in _execute_old_style():
-                    yield frame
-            return
-
-        # New style: execute and emit events
+        # Execute and emit events
         try:
             # Create execution context
             exec_ctx = ToolExecutionContext(tool_name)
 
-            result = await self._execute_tool(tool_info, call_kwargs, exec_ctx)
+            result = await self._execute_tool(tool_spec, call_kwargs, exec_ctx)
 
             # Yield any events collected during execution
             for event in exec_ctx.get_events():
-                yield event
+                yield validate_tool_frame(event)
 
             # Emit completed
-            yield {"type": "tool.completed", "tool": tool_name, "result": result}
+            yield ToolCompleted(result=result)
 
         except Exception as e:
-            yield {"type": "tool.error", "tool": tool_name, "error": str(e)}
+            yield ToolError(error=str(e))
 
     async def _execute_tool(
         self,
-        tool_info: ToolInfo,
+        tool_spec: ToolSpec,
         call_kwargs: Dict[str, Any],
         exec_ctx: ToolExecutionContext,
     ) -> Any:
@@ -363,7 +332,7 @@ class SimpleToolRunner(ToolRunner):
         - Context injection
 
         Args:
-            tool_info: Tool metadata and function.
+            tool_spec: ToolSpec with tool metadata and function.
             call_kwargs: Validated arguments for the tool.
             exec_ctx: Execution context to pass to tool.
 
@@ -374,7 +343,7 @@ class SimpleToolRunner(ToolRunner):
             Exception: Any exception from tool execution.
             asyncio.TimeoutError: If timeout is exceeded.
         """
-        fn = tool_info.func
+        fn = tool_spec.func
 
         # Add execution context if function accepts it
         sig = inspect.signature(fn)
@@ -382,7 +351,7 @@ class SimpleToolRunner(ToolRunner):
             call_kwargs["ctx"] = exec_ctx
 
         # Determine timeout
-        timeout = tool_info.timeout or self._timeout
+        timeout = tool_spec.timeout or self._timeout
 
         # Execute based on function type and execution mode
         # Check if async by looking at __wrapped__ if decorated
@@ -407,59 +376,32 @@ class SimpleToolRunner(ToolRunner):
         elif self._exec_mode == "process":
             loop = asyncio.get_running_loop()
             if self._proc_pool is None:
-                self._proc_pool = ProcessPoolExecutor()
+                self._proc_pool = ProcessPoolExecutor(max_workers=self._processes)
+            # Use functools.partial to bind kwargs to the function
+            callable_with_kwargs = functools.partial(fn, **call_kwargs)
             if timeout:
                 result = await asyncio.wait_for(
-                    loop.run_in_executor(self._proc_pool, _call_sync, fn, call_kwargs),
+                    loop.run_in_executor(self._proc_pool, callable_with_kwargs),
                     timeout=timeout,
                 )
             else:
                 result = await loop.run_in_executor(
-                    self._proc_pool, _call_sync, fn, call_kwargs
+                    self._proc_pool, callable_with_kwargs
                 )
         else:
-            # Inline sync
+            # Inline sync - execute directly in event loop (blocking, but simple)
             if timeout:
+                # For inline with timeout, we need to run in executor to allow timeout
+                loop = asyncio.get_running_loop()
                 result = await asyncio.wait_for(
-                    asyncio.get_event_loop().run_in_executor(
-                        None, lambda: fn(**call_kwargs)
-                    ),
+                    loop.run_in_executor(None, lambda: fn(**call_kwargs)),
                     timeout=timeout,
                 )
             else:
+                # No timeout - execute directly (truly inline)
                 result = fn(**call_kwargs)
 
         return result
-
-
-async def _iterate_with_timeout(
-    agen: AsyncIterator[Dict[str, Any]], timeout: float
-) -> AsyncIterator[Dict[str, Any]]:
-    """Iterate an async generator with a timeout applied to awaiting the next item.
-
-    Args:
-        agen: Async generator to iterate.
-        timeout: Timeout in seconds for each iteration step.
-
-    Yields:
-        Items from the async generator.
-
-    Raises:
-        asyncio.TimeoutError: If timeout is exceeded waiting for next item.
-    """
-    try:
-        anext = agen.__anext__  # type: ignore[attr-defined]
-    except AttributeError:  # pragma: no cover - defensive
-        # Fallback: consume via async for but timeout cannot be enforced between yields
-        async for item in agen:
-            yield item
-        return
-    while True:
-        try:
-            item = await asyncio.wait_for(anext(), timeout=timeout)
-        except StopAsyncIteration:
-            break
-        yield item
 
 
 __all__ = ["SimpleToolRunner", "ToolExecutionContext"]

@@ -14,10 +14,13 @@ The four core interfaces are:
 
 from __future__ import annotations
 
-from typing import Any, AsyncIterator, Dict, List, Protocol, Union
+from typing import Any, AsyncIterator, Dict, List, Protocol, Union, TYPE_CHECKING
 from .types import ProviderSchema, ProviderFrame, ToolFrameUnion, ToolArgs
 from .schemas import Message, Checkpoint
 from .events import SessionEvent
+
+if TYPE_CHECKING:
+    from nomos.tools.spec import ToolSpec
 
 
 class LLMProvider(Protocol):
@@ -41,7 +44,9 @@ class LLMProvider(Protocol):
         self,
         agent_spec: Any,  # AgentSpec - type: ignore for circular imports
         current_node_id: str,
-        allowed_tools: List[str],
+        available_tools: Dict[
+            str, Any
+        ],  # Dict[str, ToolSpec] - use Any to avoid circular import
         base_messages: List[Union[Message, Dict[str, Any]]],
     ) -> List[Union[Message, Dict[str, Any]]]:
         """Build context-aware messages for decision-making.
@@ -50,13 +55,26 @@ class LLMProvider(Protocol):
         the LLM, typically including:
         - System prompts with node instructions
         - Available routing options (next steps/targets)
-        - Available tools the agent can invoke
+        - Available tools with their descriptions and parameter schemas
         - Conversation history and context
+
+        The available_tools dict maps tool names to ToolSpec objects, allowing
+        the provider to include rich tool metadata in the prompt:
+        - Tool name and description
+        - Parameter schemas (JSON schema format)
+        - Timeout and permission information
 
         Args:
             agent_spec: The compiled AgentSpec containing nodes, edges, and routing info.
             current_node_id: The ID of the current node in the graph.
-            allowed_tools: List of tool names available at the current node.
+            available_tools: Dict mapping tool names to ToolSpec objects.
+                Each ToolSpec contains:
+                    - name: Tool identifier
+                    - description: Human-readable description
+                    - schema: Pydantic model for parameters
+                    - timeout: Optional execution timeout
+                    - permissions: Optional ACL info
+                    - get_args_json_schema(): Method to get JSON schema
             base_messages: Existing message history to append instructions to.
 
         Returns:
@@ -113,6 +131,7 @@ class ToolRunner(Protocol):
     tool calls and the actual Python functions.
 
     Features:
+    - Tool introspection via get_tools() returning ToolSpec objects with full metadata
     - Schema validation of tool arguments
     - Event streaming (started, progress, stdout, completed, error)
     - Timeout and cancellation support
@@ -123,7 +142,46 @@ class ToolRunner(Protocol):
         >>> runner.register("my_tool", my_tool_func)
         >>> async for frame in runner.run("my_tool", {"arg": "value"}, ctx):
         ...     print(frame)
+        >>> tools = runner.get_tools()
+        >>> print(tools["my_tool"].description)
     """
+
+    def get_tools(self) -> Dict[str, ToolSpec]:
+        """Get all registered tools with full metadata.
+
+        Returns a dict mapping tool names to ToolSpec objects, enabling
+        providers and other components to access tool information including
+        name, description, schema, timeout, and permissions.
+
+        This method is used by LLM providers to build context-aware prompts with
+        tool descriptions and parameter schemas, allowing the model to understand
+        what tools are available and how to call them.
+
+        Returns:
+            Dict mapping tool names (str) to ToolSpec objects. Each ToolSpec contains:
+                - name: Tool identifier
+                - description: Human-readable description from docstring
+                - schema: Pydantic BaseModel for parameter validation
+                - timeout: Optional execution timeout in seconds
+                - permissions: Optional ACL/permission info
+                - func: The callable function (for execution)
+
+        Example:
+            >>> runner = SimpleToolRunner()
+            >>> @runner.tool("greet")
+            ... def greet(name: str) -> str:
+            ...     \"\"\"Greet someone.\"\"\"
+            ...     return f"Hello, {name}!"
+            >>> tools = runner.get_tools()
+            >>> spec = tools["greet"]
+            >>> spec.name
+            "greet"
+            >>> spec.description
+            "Greet someone."
+            >>> spec.get_args_json_schema()
+            {"type": "object", "properties": {"name": {"type": "string"}}, ...}
+        """
+        ...
 
     def run(
         self, tool_name: str, args: ToolArgs, ctx: Dict[str, Any]

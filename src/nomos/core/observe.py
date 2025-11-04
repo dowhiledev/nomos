@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import os
 import time
-from contextlib import contextmanager
-from typing import Dict, List
+from contextlib import asynccontextmanager
+from typing import AsyncIterator, Dict, List
 
 # Global observability state
 EVENT_COUNTERS: Dict[str, int] = {}
@@ -75,23 +75,25 @@ def _otel_enabled() -> bool:
     return os.getenv("NOMOS_ENABLE_OTEL", "false").lower() == "true"
 
 
-@contextmanager
-def span(name: str):  # noqa: ANN001
-    """Create an optional OpenTelemetry span.
+@asynccontextmanager
+async def span(name: str) -> AsyncIterator[None]:  # noqa: ANN001
+    """Create an optional OpenTelemetry span (async-safe).
 
     If OTEL is enabled (NOMOS_ENABLE_OTEL=true), creates a span with the given name
     and yields control. Otherwise yields immediately without overhead.
 
     Fails gracefully if OpenTelemetry is misconfigured.
 
+    Works correctly with async operations that yield (unlike sync context managers).
+
     Args:
         name: Span name for tracing/debugging.
 
     Yields:
-        None (context manager pattern).
+        None (async context manager pattern).
 
     Example:
-        >>> with span("orchestrator.process_decision"):
+        >>> async with span("orchestrator.process_decision"):
         ...     # Decision processing happens here
         ...     pass
     """
@@ -102,8 +104,13 @@ def span(name: str):  # noqa: ANN001
         from opentelemetry import trace  # type: ignore
 
         tracer = trace.get_tracer(__name__)
-        with tracer.start_as_current_span(name):
+        # Start span and end it properly after yield (avoiding sync context manager in async)
+        span_obj = tracer.start_as_current_span(name)
+        span_obj.__enter__()
+        try:
             yield
+        finally:
+            span_obj.__exit__(None, None, None)
     except Exception:  # pragma: no cover - optional
         # fail open if OTEL not correctly configured
         yield
@@ -124,21 +131,22 @@ def record_latency(name: str, seconds: float) -> None:
     LATENCY_HIST.setdefault(name, []).append(seconds)
 
 
-@contextmanager
-def measure(name: str):  # noqa: ANN001
-    """Context manager for measuring operation duration.
+@asynccontextmanager
+async def measure(name: str) -> AsyncIterator[None]:  # noqa: ANN001
+    """Context manager for measuring operation duration (async-safe).
 
-    Measures elapsed time of a code block and records it via record_latency().
+    Measures elapsed time of an async code block and records it via record_latency().
+    Works correctly with async operations that yield or await.
 
     Args:
         name: Operation identifier.
 
     Yields:
-        None (context manager pattern).
+        None (async context manager pattern).
 
     Example:
-        >>> with measure("database.query"):
-        ...     result = db.execute(query)
+        >>> async with measure("database.query"):
+        ...     result = await db.execute(query)
         >>> # Latency automatically recorded in LATENCY_HIST["database.query"]
     """
     start = time.perf_counter()

@@ -58,20 +58,20 @@ runner = SimpleToolRunner()
 
 # Tools
 @runner.tool("get.options")
-async def get_available_coffee_options():
+async def get_available_coffee_options() -> list[dict]:
     """Retrieve available coffee options, sizes, and prices.
 
     Returns a structured list of available beverages with their size options
     and corresponding prices. Used during greeting and order entry phases.
 
     Returns:
-        String representation of coffee options including types, sizes, and prices.
+        List of coffee options with types, sizes, and prices.
 
     Example:
         >>> result = await get_available_coffee_options()
-        >>> # "Available coffee options: [{'type': 'Espresso', ...}, ...]"
+        >>> # result contains list of coffee options
     """
-    coffee_options = [
+    return [
         {
             "type": "Espresso",
             "sizes": ["Small", "Medium", "Large"],
@@ -88,7 +88,6 @@ async def get_available_coffee_options():
             "prices": [3.0, 3.5, 4.0],
         },
     ]
-    return f"Available coffee options: {coffee_options}"
 
 
 def get_total_price() -> float:
@@ -110,7 +109,7 @@ def get_total_price() -> float:
 
 
 @runner.tool("add.to.cart")
-def add_to_cart(coffee_type: str, size: str, price: float) -> str:
+async def add_to_cart(coffee_type: str, size: str) -> str:
     """Add a coffee item to the order cart.
 
     Appends a new item to the global _cart list with a unique UUID.
@@ -119,7 +118,6 @@ def add_to_cart(coffee_type: str, size: str, price: float) -> str:
     Args:
         coffee_type: Type of coffee (e.g., "Latte", "Espresso", "Cappuccino").
         size: Size of the drink (e.g., "Small", "Medium", "Large").
-        price: Price in dollars.
 
     Returns:
         Confirmation message with item ID and updated cart total.
@@ -130,6 +128,14 @@ def add_to_cart(coffee_type: str, size: str, price: float) -> str:
     """
     global _cart
     item_id = str(uuid.uuid4())
+    coffee_options = await get_available_coffee_options()
+    assert coffee_type in [opt["type"] for opt in coffee_options], "Invalid coffee type"
+    assert size in ["Small", "Medium", "Large"], "Invalid size"
+    price = next(
+        opt["prices"][opt["sizes"].index(size)]
+        for opt in coffee_options
+        if opt["type"] == coffee_type
+    )
     _cart.append(
         {
             "item_id": item_id,
@@ -160,6 +166,9 @@ def remove_item(item_id: str) -> str:
         "Item abc-123 removed successfully."
     """
     global _cart
+    assert any(item["item_id"] == item_id for item in _cart), (
+        "Item ID not found in cart"
+    )
     _cart = [item for item in _cart if item["item_id"] != item_id]
     return f"Item {item_id} removed successfully."
 
