@@ -66,8 +66,6 @@ def tool(
     - Timeout configuration
     - Permissions/ACL info
 
-    The decorated function remains callable for backward compatibility.
-
     Args:
         name: Optional tool identifier. Defaults to function name.
         description: Optional tool description. If not provided, uses the first
@@ -121,11 +119,6 @@ def tool(
         # Attach spec to function for introspection
         setattr(fn, "__tool_spec__", spec)
 
-        # Also attach legacy attributes for backward compatibility
-        setattr(fn, "__tool_name__", tname)
-        setattr(fn, "__tool_timeout__", timeout_s)
-        setattr(fn, "__tool_permissions__", permissions or {})
-
         # Preserve async nature of the function
         if inspect.iscoroutinefunction(fn):
             @wraps(fn)
@@ -134,9 +127,6 @@ def tool(
 
             # Transfer spec to wrapper
             setattr(async_wrapper, "__tool_spec__", spec)
-            setattr(async_wrapper, "__tool_name__", tname)
-            setattr(async_wrapper, "__tool_timeout__", timeout_s)
-            setattr(async_wrapper, "__tool_permissions__", permissions or {})
             setattr(async_wrapper, "__wrapped__", fn)  # Store original for introspection
 
             return async_wrapper
@@ -147,9 +137,6 @@ def tool(
 
             # Transfer spec to wrapper
             setattr(wrapper, "__tool_spec__", spec)
-            setattr(wrapper, "__tool_name__", tname)
-            setattr(wrapper, "__tool_timeout__", timeout_s)
-            setattr(wrapper, "__tool_permissions__", permissions or {})
             setattr(wrapper, "__wrapped__", fn)  # Store original for introspection
 
             return wrapper
@@ -192,13 +179,11 @@ def registry_from_tools(*funcs: Callable[..., Any]) -> Dict[str, ToolSpec]:
     """
     reg: Dict[str, ToolSpec] = {}
     for fn in funcs:
-        # Prefer __tool_spec__ (new style), fall back to legacy attributes
         spec = getattr(fn, "__tool_spec__", None)
         if spec:
             reg[spec.name] = spec
         else:
-            # Legacy: only name is available, skip
-            pass
+            raise ValueError(f"Function {fn.__name__} must be decorated with @tool")
     return reg
 
 

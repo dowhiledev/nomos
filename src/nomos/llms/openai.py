@@ -9,7 +9,7 @@ It handles:
 - Fallback handling for different OpenAI API modes
 
 The adapter prefers structured outputs (via response_format=Decision) but falls
-back to JSON mode streaming for compatibility.
+back to JSON mode streaming when structured outputs are not available.
 """
 
 from __future__ import annotations
@@ -358,7 +358,7 @@ class OpenAI(LLMProvider):
             # Fallback to streaming JSON mode
             pass
 
-        # Fallback for streaming JSON mode (legacy behavior)
+        # Fallback for streaming JSON mode
         # Aggregate the full text to yield a final decision
         full_text: List[str] = []
         tool_calls: Dict[int, Dict[str, Any]] = {}

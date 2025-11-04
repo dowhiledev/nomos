@@ -163,7 +163,7 @@ class SimpleToolRunner(ToolRunner):
         """Initialize the tool runner.
 
         Args:
-            registry: Optional dict of {tool_name: callable} for backward compatibility.
+            registry: Optional dict of {tool_name: ToolSpec}.
             timeout_s: Default timeout in seconds for all tools.
             allowed_tools: Optional set of tool names to allow (ACL).
                 If set, only tools in this set can be executed.
@@ -181,31 +181,11 @@ class SimpleToolRunner(ToolRunner):
         if self._exec_mode == "process":
             self._proc_pool = ProcessPoolExecutor(max_workers=processes)
 
-        # Backward compatibility: if registry provided, populate from old format
         if registry:
-            for name, func_or_spec in registry.items():
-                # Handle both new ToolSpec objects and old callables
-                if isinstance(func_or_spec, ToolSpec):
-                    # Already a ToolSpec, just use it
-                    self._registry[name] = func_or_spec
-                else:
-                    # Check if it's a decorated function with __tool_spec__
-                    existing_spec = getattr(func_or_spec, "__tool_spec__", None)
-                    if existing_spec:
-                        # Use the spec from the decorator
-                        self._registry[name] = existing_spec
-                    else:
-                        # Old callable format, convert to ToolSpec
-                        schema = _create_tool_schema(func_or_spec, name)
-                        description = func_or_spec.__doc__ or ""
-                        timeout = getattr(func_or_spec, "__tool_timeout__", None)
-                        self._registry[name] = ToolSpec(
-                            name=name,
-                            func=func_or_spec,
-                            schema=schema,
-                            timeout=timeout,
-                            description=description.strip(),
-                        )
+            for name, tool_spec in registry.items():
+                if not isinstance(tool_spec, ToolSpec):
+                    raise TypeError(f"Registry must contain ToolSpec objects, got {type(tool_spec)}")
+                self._registry[name] = tool_spec
 
     def tool(
         self, name: str | None = None, *, description: str | None = None, timeout: float | None = None
@@ -248,10 +228,6 @@ class SimpleToolRunner(ToolRunner):
                 timeout=timeout,
                 description=tool_description,
             )
-
-            # Set metadata for backward compatibility
-            setattr(func, "__tool_name__", tool_name)
-            setattr(func, "__tool_timeout__", timeout)
 
             return func
 
@@ -333,42 +309,7 @@ class SimpleToolRunner(ToolRunner):
 
         fn = tool_spec.func
 
-        # Backward compatibility: if async generator, use old behavior
-        if inspect.isasyncgenfunction(fn):
-
-            async def _execute_old_style():
-                # Add ctx if function accepts it
-                sig = inspect.signature(fn)
-                if "ctx" in sig.parameters:
-                    call_kwargs["ctx"] = ctx
-
-                res = fn(**call_kwargs)
-                async for frame in res:
-                    try:
-                        fr = validate_tool_frame(frame)
-                        yield fr.model_dump()
-                    except Exception:
-                        yield {
-                            "type": "tool.error",
-                            "tool": tool_name,
-                            "error": "invalid frame",
-                        }
-
-            # adopt per-tool timeout
-            timeout = tool_spec.timeout or self._timeout
-            if timeout:
-                agen = _execute_old_style()
-                try:
-                    async for frame in _iterate_with_timeout(agen, timeout):
-                        yield frame
-                except asyncio.TimeoutError:
-                    yield {"type": "tool.error", "tool": tool_name, "error": "timeout"}
-            else:
-                async for frame in _execute_old_style():
-                    yield frame
-            return
-
-        # New style: execute and emit events
+        # Execute and emit events
         try:
             # Create execution context
             exec_ctx = ToolExecutionContext(tool_name)
