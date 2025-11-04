@@ -323,6 +323,11 @@ class Orchestrator:
                         break
                     # Get current node for this turn (may have changed due to routing)
                     current_node_id = self._current_node.get(session_id)
+                    
+                    # Update allowed tools for the current node (in case we routed to a new node)
+                    node_allowed_tools = None
+                    if isinstance(self._agent, AgentSpec) and current_node_id:
+                        node_allowed_tools = self._agent.get_node_tools(current_node_id)
 
                     if self._verbose:
                         _console.rule(
@@ -337,11 +342,22 @@ class Orchestrator:
                         msgs = list(messages_base)
                         if isinstance(self._agent, AgentSpec) and current_node_id:
                             try:
-                                tools_list = (
-                                    list(allowed_tools) if allowed_tools else []
-                                )
+                                # Get available tool specs from the runner
+                                available_tool_specs = {}
+                                if eff_tool_runner:
+                                    all_tools = eff_tool_runner.get_tools()
+                                    # Filter to only allowed tools for this node
+                                    if node_allowed_tools:
+                                        available_tool_specs = {
+                                            name: spec
+                                            for name, spec in all_tools.items()
+                                            if name in node_allowed_tools
+                                        }
+                                    else:
+                                        available_tool_specs = all_tools
+                                
                                 msgs = eff_provider.build_decision_messages(  # type: ignore[union-attr]
-                                    self._agent, current_node_id, tools_list, msgs
+                                    self._agent, current_node_id, available_tool_specs, msgs
                                 )
                             except Exception:
                                 msgs = list(messages_base)

@@ -2,18 +2,18 @@
 
 SimpleToolRunner is the primary implementation of the ToolRunner protocol.
 It provides:
-- Function registration via decorator or registry
+- Function registration via decorator or ToolSpec registry
 - Parameter schema validation via Pydantic
 - Multiple execution modes (inline, thread, process)
 - Timeout and cancellation support
 - Event streaming for execution progress
+- Tool introspection via get_tools() returning ToolSpec objects
 """
 
 from __future__ import annotations
 
 import asyncio
 import inspect
-from dataclasses import dataclass
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional
 from concurrent.futures import ProcessPoolExecutor
 
@@ -22,27 +22,11 @@ from pydantic import BaseModel, create_model
 from nomos.core.interfaces import ToolRunner
 from nomos.core.tool_events import validate_tool_frame
 from nomos.core.types import ToolFrameUnion, ToolArgs
+from .spec import ToolSpec
 
 
 ToolCallable = Callable[..., Any]
 """Type alias for tool functions."""
-
-
-@dataclass
-class ToolInfo:
-    """Metadata for a registered tool.
-
-    Attributes:
-        func: The tool function (sync or async).
-        schema: Pydantic model for parameter validation.
-        timeout: Optional per-tool timeout in seconds.
-        description: Tool description from docstring.
-    """
-
-    func: ToolCallable
-    schema: type[BaseModel]
-    timeout: Optional[float]
-    description: str
 
 
 class ToolExecutionContext:
@@ -189,7 +173,7 @@ class SimpleToolRunner(ToolRunner):
                 - "process": Run in process pool
             processes: Number of processes for "process" mode (default: auto).
         """
-        self._registry: Dict[str, ToolInfo] = {}
+        self._registry: Dict[str, ToolSpec] = {}
         self._timeout = timeout_s
         self._allowed = allowed_tools
         self._exec_mode = execution_mode
@@ -199,24 +183,39 @@ class SimpleToolRunner(ToolRunner):
 
         # Backward compatibility: if registry provided, populate from old format
         if registry:
-            for name, func in registry.items():
-                schema = _create_tool_schema(func, name)
-                description = func.__doc__ or ""
-                timeout = getattr(func, "__tool_timeout__", None)
-                self._registry[name] = ToolInfo(
-                    func=func,
-                    schema=schema,
-                    timeout=timeout,
-                    description=description.strip(),
-                )
+            for name, func_or_spec in registry.items():
+                # Handle both new ToolSpec objects and old callables
+                if isinstance(func_or_spec, ToolSpec):
+                    # Already a ToolSpec, just use it
+                    self._registry[name] = func_or_spec
+                else:
+                    # Check if it's a decorated function with __tool_spec__
+                    existing_spec = getattr(func_or_spec, "__tool_spec__", None)
+                    if existing_spec:
+                        # Use the spec from the decorator
+                        self._registry[name] = existing_spec
+                    else:
+                        # Old callable format, convert to ToolSpec
+                        schema = _create_tool_schema(func_or_spec, name)
+                        description = func_or_spec.__doc__ or ""
+                        timeout = getattr(func_or_spec, "__tool_timeout__", None)
+                        self._registry[name] = ToolSpec(
+                            name=name,
+                            func=func_or_spec,
+                            schema=schema,
+                            timeout=timeout,
+                            description=description.strip(),
+                        )
 
     def tool(
-        self, name: str | None = None, *, timeout: float | None = None
+        self, name: str | None = None, *, description: str | None = None, timeout: float | None = None
     ) -> Callable[[ToolCallable], ToolCallable]:
         """Decorator to register a tool function.
 
         Args:
             name: Tool name (defaults to function name).
+            description: Optional tool description. If not provided, uses the first
+                paragraph of the function's docstring.
             timeout: Per-tool timeout in seconds (overrides runner default).
 
         Returns:
@@ -225,19 +224,29 @@ class SimpleToolRunner(ToolRunner):
         Example:
             >>> @runner.tool("greet", timeout=5.0)
             ... async def greet(name: str) -> str:
+            ...     \"\"\"Greet someone.\"\"\"
             ...     return f"Hello, {name}!"
         """
 
         def decorator(func: ToolCallable) -> ToolCallable:
             tool_name = name or func.__name__
             schema = _create_tool_schema(func, tool_name)
-            description = func.__doc__ or ""
+            
+            # Use provided description, or extract first paragraph from docstring
+            if description is not None:
+                tool_description = description
+            else:
+                doc = func.__doc__ or ""
+                # Extract first paragraph (text before first double newline or end of string)
+                first_paragraph = doc.split("\n\n")[0].strip()
+                tool_description = first_paragraph
 
-            self._registry[tool_name] = ToolInfo(
+            self._registry[tool_name] = ToolSpec(
+                name=tool_name,
                 func=func,
                 schema=schema,
                 timeout=timeout,
-                description=description.strip(),
+                description=tool_description,
             )
 
             # Set metadata for backward compatibility
@@ -247,6 +256,34 @@ class SimpleToolRunner(ToolRunner):
             return func
 
         return decorator
+
+    def get_tools(self) -> Dict[str, ToolSpec]:
+        """Get all registered tools with full metadata.
+
+        Returns a dict mapping tool names to ToolSpec objects, enabling
+        providers and other components to access tool information including
+        name, description, schema, timeout, and permissions.
+
+        This method is exposed via the ToolRunner protocol and is used by
+        LLM providers to build context-aware prompts with tool schemas
+        and descriptions.
+
+        Returns:
+            Dict mapping tool names (str) to ToolSpec objects.
+
+        Example:
+            >>> runner = SimpleToolRunner()
+            >>> @runner.tool("greet")
+            ... def greet(name: str) -> str:
+            ...     \"\"\"Greet someone.\"\"\"
+            ...     return f"Hello, {name}!"
+            >>> tools = runner.get_tools()
+            >>> tools["greet"].description
+            "Greet someone."
+            >>> tools["greet"].get_args_json_schema()
+            {"type": "object", "properties": {"name": {...}}, ...}
+        """
+        return self._registry.copy()
 
     async def run(
         self, tool_name: str, args: ToolArgs, ctx: Dict[str, Any]
@@ -274,14 +311,14 @@ class SimpleToolRunner(ToolRunner):
             yield {"type": "tool.error", "tool": tool_name, "error": "unauthorized"}
             return
 
-        tool_info = self._registry.get(tool_name)
-        if not tool_info:
+        tool_spec = self._registry.get(tool_name)
+        if not tool_spec:
             yield {"type": "tool.error", "tool": tool_name, "error": "unknown tool"}
             return
 
         # Validate args against schema
         try:
-            validated_args = tool_info.schema(**args)
+            validated_args = tool_spec.schema(**args)
             call_kwargs = validated_args.model_dump()
         except Exception as e:
             yield {
@@ -294,7 +331,7 @@ class SimpleToolRunner(ToolRunner):
         # Emit started
         yield {"type": "tool.started", "tool": tool_name}
 
-        fn = tool_info.func
+        fn = tool_spec.func
 
         # Backward compatibility: if async generator, use old behavior
         if inspect.isasyncgenfunction(fn):
@@ -318,7 +355,7 @@ class SimpleToolRunner(ToolRunner):
                         }
 
             # adopt per-tool timeout
-            timeout = tool_info.timeout or self._timeout
+            timeout = tool_spec.timeout or self._timeout
             if timeout:
                 agen = _execute_old_style()
                 try:
@@ -336,7 +373,7 @@ class SimpleToolRunner(ToolRunner):
             # Create execution context
             exec_ctx = ToolExecutionContext(tool_name)
 
-            result = await self._execute_tool(tool_info, call_kwargs, exec_ctx)
+            result = await self._execute_tool(tool_spec, call_kwargs, exec_ctx)
 
             # Yield any events collected during execution
             for event in exec_ctx.get_events():
@@ -350,7 +387,7 @@ class SimpleToolRunner(ToolRunner):
 
     async def _execute_tool(
         self,
-        tool_info: ToolInfo,
+        tool_spec: ToolSpec,
         call_kwargs: Dict[str, Any],
         exec_ctx: ToolExecutionContext,
     ) -> Any:
@@ -363,7 +400,7 @@ class SimpleToolRunner(ToolRunner):
         - Context injection
 
         Args:
-            tool_info: Tool metadata and function.
+            tool_spec: ToolSpec with tool metadata and function.
             call_kwargs: Validated arguments for the tool.
             exec_ctx: Execution context to pass to tool.
 
@@ -374,7 +411,7 @@ class SimpleToolRunner(ToolRunner):
             Exception: Any exception from tool execution.
             asyncio.TimeoutError: If timeout is exceeded.
         """
-        fn = tool_info.func
+        fn = tool_spec.func
 
         # Add execution context if function accepts it
         sig = inspect.signature(fn)
@@ -382,7 +419,7 @@ class SimpleToolRunner(ToolRunner):
             call_kwargs["ctx"] = exec_ctx
 
         # Determine timeout
-        timeout = tool_info.timeout or self._timeout
+        timeout = tool_spec.timeout or self._timeout
 
         # Execute based on function type and execution mode
         # Check if async by looking at __wrapped__ if decorated
