@@ -126,17 +126,33 @@ def tool(
         setattr(fn, "__tool_timeout__", timeout_s)
         setattr(fn, "__tool_permissions__", permissions or {})
 
-        @wraps(fn)
-        def wrapper(*args: Any, **kwargs: Any):  # noqa: ANN401
-            return fn(*args, **kwargs)
+        # Preserve async nature of the function
+        if inspect.iscoroutinefunction(fn):
+            @wraps(fn)
+            async def async_wrapper(*args: Any, **kwargs: Any):  # noqa: ANN401
+                return await fn(*args, **kwargs)
 
-        # Transfer spec to wrapper
-        setattr(wrapper, "__tool_spec__", spec)
-        setattr(wrapper, "__tool_name__", tname)
-        setattr(wrapper, "__tool_timeout__", timeout_s)
-        setattr(wrapper, "__tool_permissions__", permissions or {})
+            # Transfer spec to wrapper
+            setattr(async_wrapper, "__tool_spec__", spec)
+            setattr(async_wrapper, "__tool_name__", tname)
+            setattr(async_wrapper, "__tool_timeout__", timeout_s)
+            setattr(async_wrapper, "__tool_permissions__", permissions or {})
+            setattr(async_wrapper, "__wrapped__", fn)  # Store original for introspection
 
-        return wrapper
+            return async_wrapper
+        else:
+            @wraps(fn)
+            def wrapper(*args: Any, **kwargs: Any):  # noqa: ANN401
+                return fn(*args, **kwargs)
+
+            # Transfer spec to wrapper
+            setattr(wrapper, "__tool_spec__", spec)
+            setattr(wrapper, "__tool_name__", tname)
+            setattr(wrapper, "__tool_timeout__", timeout_s)
+            setattr(wrapper, "__tool_permissions__", permissions or {})
+            setattr(wrapper, "__wrapped__", fn)  # Store original for introspection
+
+            return wrapper
 
     return _decorator
 
