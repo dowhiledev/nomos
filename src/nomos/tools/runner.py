@@ -156,7 +156,6 @@ class SimpleToolRunner(ToolRunner):
         registry: Dict[str, ToolCallable] | None = None,
         *,
         timeout_s: float | None = None,
-        allowed_tools: set[str] | None = None,
         execution_mode: str = "inline",  # inline | thread | process
         processes: int | None = None,
     ) -> None:
@@ -165,8 +164,6 @@ class SimpleToolRunner(ToolRunner):
         Args:
             registry: Optional dict of {tool_name: ToolSpec}.
             timeout_s: Default timeout in seconds for all tools.
-            allowed_tools: Optional set of tool names to allow (ACL).
-                If set, only tools in this set can be executed.
             execution_mode: How to execute functions:
                 - "inline": Run synchronously in event loop
                 - "thread": Run in thread pool
@@ -175,7 +172,6 @@ class SimpleToolRunner(ToolRunner):
         """
         self._registry: Dict[str, ToolSpec] = {}
         self._timeout = timeout_s
-        self._allowed = allowed_tools
         self._exec_mode = execution_mode
         self._proc_pool: ProcessPoolExecutor | None = None
         if self._exec_mode == "process":
@@ -282,11 +278,6 @@ class SimpleToolRunner(ToolRunner):
             ...     if frame["type"] == "tool.completed":
             ...         print(f"Result: {frame['result']}")
         """
-        # ACL check
-        if self._allowed is not None and tool_name not in self._allowed:
-            yield {"type": "tool.error", "tool": tool_name, "error": "unauthorized"}
-            return
-
         tool_spec = self._registry.get(tool_name)
         if not tool_spec:
             yield {"type": "tool.error", "tool": tool_name, "error": "unknown tool"}

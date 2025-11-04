@@ -502,7 +502,7 @@ class Orchestrator:
                                         )
 
                                     runner = eff_tool_runner
-                                    if allowed_tools is not None:
+                                    if node_allowed_tools is not None:
 
                                         class _FilteredRunner:
                                             def __init__(self, inner, allowed):  # noqa: ANN001
@@ -527,7 +527,7 @@ class Orchestrator:
                                                 ):
                                                     yield fr
 
-                                        runner = _FilteredRunner(runner, allowed_tools)
+                                        runner = _FilteredRunner(runner, node_allowed_tools)
                                     last_result: Any | None = None
                                     async for tframe in runner.run(
                                         tool_name, tool_kwargs, ctx
