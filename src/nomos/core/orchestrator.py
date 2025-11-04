@@ -474,6 +474,15 @@ class Orchestrator:
                                     )
                                     inc(EventType.ERROR_OCCURRED.value)
                                     break
+                                
+                                # Add tool call message to history
+                                from nomos.core.schemas import Message
+                                tool_call_msg = Message.tool_call_message(
+                                    tool_name, tool_kwargs
+                                ).model_dump()
+                                messages_base.append(tool_call_msg)
+                                self._messages[session_id].append(tool_call_msg)
+                                
                                 # Stream tool frames
                                 ctx = {
                                     "cancel_event": self._cancel_events[session_id],
@@ -555,28 +564,26 @@ class Orchestrator:
                                         inc(frame_type_str)
                                         if frame_type_str == "tool.completed":
                                             last_result = tframe.get("result")
+                                        elif frame_type_str == "tool.error":
+                                            # Tool execution failed - add error message
+                                            error_msg = tframe.get("error", "Unknown error")
+                                            from nomos.core.schemas import Message
+                                            tool_error_msg = Message.tool_error_message(
+                                                tool_name, error_msg
+                                            ).model_dump()
+                                            messages_base.append(tool_error_msg)
+                                            self._messages[session_id].append(tool_error_msg)
+                                            # Clear last_result so we don't add a success message
+                                            last_result = None
 
                                     # feed tool result back into messages for next turn
                                     if last_result is not None:
-                                        import json as _json  # local import to avoid top-level cost
-
-                                        messages_base.append(
-                                            {
-                                                "role": "assistant",
-                                                "content": [
-                                                    {
-                                                        "type": "text",
-                                                        "data": f"TOOL_RESULT {tool_name}: "
-                                                        + _json.dumps(last_result)[
-                                                            :1000
-                                                        ],
-                                                    }
-                                                ],
-                                            }
-                                        )
-                                        self._messages[session_id].append(
-                                            messages_base[-1]
-                                        )
+                                        from nomos.core.schemas import Message
+                                        tool_output_msg = Message.tool_output_message(
+                                            tool_name, last_result
+                                        ).model_dump()
+                                        messages_base.append(tool_output_msg)
+                                        self._messages[session_id].append(tool_output_msg)
                             # Handle routing (MOVE) only on decision frame
                             if isinstance(self._agent, AgentSpec) and action == "MOVE":
                                 to_id = self._agent.route(

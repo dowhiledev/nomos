@@ -89,7 +89,8 @@ def _to_openai_messages(
     """Convert Nomos Message objects to OpenAI message format.
 
     Normalizes mixed Message and dict inputs to a consistent OpenAI format.
-    Handles both plain text and multi-part content.
+    Handles both plain text and multi-part content. Maps Nomos-specific roles
+    (tool_call, tool_output, tool_error) to OpenAI's expected roles.
 
     Args:
         messages: List of Message objects or dicts.
@@ -113,13 +114,24 @@ def _to_openai_messages(
             m = Message.model_validate(m)
         role = m.role
         content = m.content
+        
+        # Map Nomos tool-specific roles to OpenAI format
+        # tool_call -> assistant (the assistant decided to call a tool)
+        # tool_output -> user (the result is information from the system, like user input)
+        # tool_error -> user (errors are also system feedback)
+        openai_role = role
+        if role == "tool_call":
+            openai_role = "assistant"
+        elif role in ("tool_output", "tool_error"):
+            openai_role = "user"
+        
         if isinstance(content, list):
             raw_parts = [
                 c.model_dump() if hasattr(c, "model_dump") else c for c in content
             ]
-            oai.append({"role": role, "content": _to_openai_content(raw_parts)})
+            oai.append({"role": openai_role, "content": _to_openai_content(raw_parts)})
         else:
-            oai.append({"role": role, "content": content})
+            oai.append({"role": openai_role, "content": content})
     return oai
 
 
