@@ -13,6 +13,7 @@ It provides:
 from __future__ import annotations
 
 import asyncio
+import functools
 import inspect
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional
 from concurrent.futures import ProcessPoolExecutor
@@ -20,7 +21,6 @@ from concurrent.futures import ProcessPoolExecutor
 from pydantic import BaseModel, create_model
 
 from nomos.core.interfaces import ToolRunner
-from nomos.core.tool_events import validate_tool_frame
 from nomos.core.types import ToolFrameUnion, ToolArgs
 from .spec import ToolSpec
 
@@ -124,10 +124,6 @@ def _create_tool_schema(func: Callable[..., Any], name: str) -> type[BaseModel]:
     return create_model(f"{name}Args", **fields)
 
 
-def _call_sync(fn: ToolCallable, kwargs: Dict[str, Any]) -> Any:  # noqa: ANN401
-    """Call a sync function with kwargs (for process pool executor)."""
-    return fn(**kwargs)
-
 
 class SimpleToolRunner(ToolRunner):
     """Simple implementation of ToolRunner protocol.
@@ -173,9 +169,8 @@ class SimpleToolRunner(ToolRunner):
         self._registry: Dict[str, ToolSpec] = {}
         self._timeout = timeout_s
         self._exec_mode = execution_mode
+        self._processes = processes
         self._proc_pool: ProcessPoolExecutor | None = None
-        if self._exec_mode == "process":
-            self._proc_pool = ProcessPoolExecutor(max_workers=processes)
 
         if registry:
             for name, tool_spec in registry.items():
@@ -376,59 +371,29 @@ class SimpleToolRunner(ToolRunner):
         elif self._exec_mode == "process":
             loop = asyncio.get_running_loop()
             if self._proc_pool is None:
-                self._proc_pool = ProcessPoolExecutor()
+                self._proc_pool = ProcessPoolExecutor(max_workers=self._processes)
+            # Use functools.partial to bind kwargs to the function
+            callable_with_kwargs = functools.partial(fn, **call_kwargs)
             if timeout:
                 result = await asyncio.wait_for(
-                    loop.run_in_executor(self._proc_pool, _call_sync, fn, call_kwargs),
+                    loop.run_in_executor(self._proc_pool, callable_with_kwargs),
                     timeout=timeout,
                 )
             else:
-                result = await loop.run_in_executor(
-                    self._proc_pool, _call_sync, fn, call_kwargs
-                )
+                result = await loop.run_in_executor(self._proc_pool, callable_with_kwargs)
         else:
-            # Inline sync
+            # Inline sync - execute directly in event loop (blocking, but simple)
             if timeout:
+                # For inline with timeout, we need to run in executor to allow timeout
+                loop = asyncio.get_running_loop()
                 result = await asyncio.wait_for(
-                    asyncio.get_event_loop().run_in_executor(
-                        None, lambda: fn(**call_kwargs)
-                    ),
+                    loop.run_in_executor(None, lambda: fn(**call_kwargs)),
                     timeout=timeout,
                 )
             else:
+                # No timeout - execute directly (truly inline)
                 result = fn(**call_kwargs)
 
         return result
-
-
-async def _iterate_with_timeout(
-    agen: AsyncIterator[Dict[str, Any]], timeout: float
-) -> AsyncIterator[Dict[str, Any]]:
-    """Iterate an async generator with a timeout applied to awaiting the next item.
-
-    Args:
-        agen: Async generator to iterate.
-        timeout: Timeout in seconds for each iteration step.
-
-    Yields:
-        Items from the async generator.
-
-    Raises:
-        asyncio.TimeoutError: If timeout is exceeded waiting for next item.
-    """
-    try:
-        anext = agen.__anext__  # type: ignore[attr-defined]
-    except AttributeError:  # pragma: no cover - defensive
-        # Fallback: consume via async for but timeout cannot be enforced between yields
-        async for item in agen:
-            yield item
-        return
-    while True:
-        try:
-            item = await asyncio.wait_for(anext(), timeout=timeout)
-        except StopAsyncIteration:
-            break
-        yield item
-
 
 __all__ = ["SimpleToolRunner", "ToolExecutionContext"]

@@ -305,14 +305,6 @@ class Orchestrator:
                 eff_tool_runner = (
                     ov.get("tool_runner", self._tool_runner) or self._tool_runner
                 )
-                # Get tools from node overrides, or fall back to node spec
-                allowed_tools = ov.get("allowed_tools")
-                if (
-                    allowed_tools is None
-                    and isinstance(self._agent, AgentSpec)
-                    and current_node_id
-                ):
-                    allowed_tools = self._agent.get_node_tools(current_node_id)
 
                 # Agent loop: continue making decisions within this input until RESPOND or max turns
                 turns = 0
