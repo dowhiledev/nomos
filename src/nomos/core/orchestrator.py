@@ -501,35 +501,8 @@ class Orchestrator:
                                             )
                                         )
 
-                                    runner = eff_tool_runner
-                                    if node_allowed_tools is not None:
-
-                                        class _FilteredRunner:
-                                            def __init__(self, inner, allowed):  # noqa: ANN001
-                                                self._inner = inner
-                                                self._allowed = set(allowed)
-
-                                            async def run(
-                                                self,
-                                                tool_name: str,
-                                                args: Dict[str, Any],
-                                                ctx: Dict[str, Any],
-                                            ):  # noqa: ANN001
-                                                if tool_name not in self._allowed:
-                                                    yield {
-                                                        "type": "tool.error",
-                                                        "tool": tool_name,
-                                                        "error": "unauthorized",
-                                                    }
-                                                    return
-                                                async for fr in self._inner.run(
-                                                    tool_name, args, ctx
-                                                ):
-                                                    yield fr
-
-                                        runner = _FilteredRunner(runner, node_allowed_tools)
                                     last_result: Any | None = None
-                                    async for tframe in runner.run(
+                                    async for tframe in eff_tool_runner.run(
                                         tool_name, tool_kwargs, ctx
                                     ):
                                         if (
