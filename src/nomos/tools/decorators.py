@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import inspect
 from functools import wraps
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, cast
 
 from pydantic import BaseModel, create_model
 
@@ -53,7 +53,7 @@ def tool(
     name: Optional[str] = None,
     *,
     description: Optional[str] = None,
-    timeout_s: float | None = None,
+    timeout_s: Optional[float] = None,
     permissions: Optional[Dict[str, Any]] = None,
 ):  # noqa: ANN001
     """Decorator to mark a function as a tool with optional metadata.
@@ -94,9 +94,9 @@ def tool(
     """
 
     def _decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
-        tname = name or getattr(fn, "__name__", "tool")
+        tname: str = cast(str, name or getattr(fn, "__name__", "tool"))
         schema = _create_tool_schema(fn, tname)
-        
+
         # Use provided description, or extract first paragraph from docstring
         if description is not None:
             tool_description = description
@@ -121,16 +121,20 @@ def tool(
 
         # Preserve async nature of the function
         if inspect.iscoroutinefunction(fn):
+
             @wraps(fn)
             async def async_wrapper(*args: Any, **kwargs: Any):  # noqa: ANN401
                 return await fn(*args, **kwargs)
 
             # Transfer spec to wrapper
             setattr(async_wrapper, "__tool_spec__", spec)
-            setattr(async_wrapper, "__wrapped__", fn)  # Store original for introspection
+            setattr(
+                async_wrapper, "__wrapped__", fn
+            )  # Store original for introspection
 
             return async_wrapper
         else:
+
             @wraps(fn)
             def wrapper(*args: Any, **kwargs: Any):  # noqa: ANN401
                 return fn(*args, **kwargs)

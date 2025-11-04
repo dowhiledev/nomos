@@ -44,7 +44,9 @@ class LLMProvider(Protocol):
         self,
         agent_spec: Any,  # AgentSpec - type: ignore for circular imports
         current_node_id: str,
-        available_tools: Dict[str, Any],  # Dict[str, ToolSpec] - use Any to avoid circular import
+        available_tools: Dict[
+            str, Any
+        ],  # Dict[str, ToolSpec] - use Any to avoid circular import
         base_messages: List[Union[Message, Dict[str, Any]]],
     ) -> List[Union[Message, Dict[str, Any]]]:
         """Build context-aware messages for decision-making.

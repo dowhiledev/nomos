@@ -114,7 +114,7 @@ def _to_openai_messages(
             m = Message.model_validate(m)
         role = m.role
         content = m.content
-        
+
         # Map Nomos tool-specific roles to OpenAI format
         # tool_call -> assistant (the assistant decided to call a tool)
         # tool_output -> user (the result is information from the system, like user input)
@@ -124,7 +124,7 @@ def _to_openai_messages(
             openai_role = "assistant"
         elif role in ("tool_output", "tool_error"):
             openai_role = "user"
-        
+
         if isinstance(content, list):
             raw_parts = [
                 c.model_dump() if hasattr(c, "model_dump") else c for c in content
@@ -234,7 +234,7 @@ class OpenAI(LLMProvider):
             if tool_spec.description:
                 desc_line += f": {tool_spec.description}"
             tools_desc.append(desc_line)
-            
+
             # Include parameter schema with defaults
             try:
                 params_info = tool_spec.get_params_info()

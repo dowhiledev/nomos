@@ -15,13 +15,19 @@ from __future__ import annotations
 import asyncio
 import functools
 import inspect
-from typing import Any, AsyncIterator, Callable, Dict, List, Optional
+from typing import Any, AsyncIterator, Callable, Dict, List
 from concurrent.futures import ProcessPoolExecutor
 
 from pydantic import BaseModel, create_model
 
 from nomos.core.interfaces import ToolRunner
 from nomos.core.types import ToolFrameUnion, ToolArgs
+from nomos.core.tool_events import (
+    ToolStarted,
+    ToolCompleted,
+    ToolError,
+    validate_tool_frame,
+)
 from .spec import ToolSpec
 
 
@@ -124,7 +130,6 @@ def _create_tool_schema(func: Callable[..., Any], name: str) -> type[BaseModel]:
     return create_model(f"{name}Args", **fields)
 
 
-
 class SimpleToolRunner(ToolRunner):
     """Simple implementation of ToolRunner protocol.
 
@@ -175,11 +180,17 @@ class SimpleToolRunner(ToolRunner):
         if registry:
             for name, tool_spec in registry.items():
                 if not isinstance(tool_spec, ToolSpec):
-                    raise TypeError(f"Registry must contain ToolSpec objects, got {type(tool_spec)}")
+                    raise TypeError(
+                        f"Registry must contain ToolSpec objects, got {type(tool_spec)}"
+                    )
                 self._registry[name] = tool_spec
 
     def tool(
-        self, name: str | None = None, *, description: str | None = None, timeout: float | None = None
+        self,
+        name: str | None = None,
+        *,
+        description: str | None = None,
+        timeout: float | None = None,
     ) -> Callable[[ToolCallable], ToolCallable]:
         """Decorator to register a tool function.
 
@@ -202,7 +213,7 @@ class SimpleToolRunner(ToolRunner):
         def decorator(func: ToolCallable) -> ToolCallable:
             tool_name = name or func.__name__
             schema = _create_tool_schema(func, tool_name)
-            
+
             # Use provided description, or extract first paragraph from docstring
             if description is not None:
                 tool_description = description
@@ -275,7 +286,7 @@ class SimpleToolRunner(ToolRunner):
         """
         tool_spec = self._registry.get(tool_name)
         if not tool_spec:
-            yield {"type": "tool.error", "tool": tool_name, "error": "unknown tool"}
+            yield ToolError(error="unknown tool")
             return
 
         # Validate args against schema
@@ -283,17 +294,11 @@ class SimpleToolRunner(ToolRunner):
             validated_args = tool_spec.schema(**args)
             call_kwargs = validated_args.model_dump()
         except Exception as e:
-            yield {
-                "type": "tool.error",
-                "tool": tool_name,
-                "error": f"invalid args: {e}",
-            }
+            yield ToolError(error=f"invalid args: {e}")
             return
 
         # Emit started
-        yield {"type": "tool.started", "tool": tool_name}
-
-        fn = tool_spec.func
+        yield ToolStarted(tool=tool_name)
 
         # Execute and emit events
         try:
@@ -304,13 +309,13 @@ class SimpleToolRunner(ToolRunner):
 
             # Yield any events collected during execution
             for event in exec_ctx.get_events():
-                yield event
+                yield validate_tool_frame(event)
 
             # Emit completed
-            yield {"type": "tool.completed", "tool": tool_name, "result": result}
+            yield ToolCompleted(result=result)
 
         except Exception as e:
-            yield {"type": "tool.error", "tool": tool_name, "error": str(e)}
+            yield ToolError(error=str(e))
 
     async def _execute_tool(
         self,
@@ -380,7 +385,9 @@ class SimpleToolRunner(ToolRunner):
                     timeout=timeout,
                 )
             else:
-                result = await loop.run_in_executor(self._proc_pool, callable_with_kwargs)
+                result = await loop.run_in_executor(
+                    self._proc_pool, callable_with_kwargs
+                )
         else:
             # Inline sync - execute directly in event loop (blocking, but simple)
             if timeout:
@@ -395,5 +402,6 @@ class SimpleToolRunner(ToolRunner):
                 result = fn(**call_kwargs)
 
         return result
+
 
 __all__ = ["SimpleToolRunner", "ToolExecutionContext"]

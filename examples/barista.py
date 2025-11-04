@@ -166,7 +166,9 @@ def remove_item(item_id: str) -> str:
         "Item abc-123 removed successfully."
     """
     global _cart
-    assert any(item["item_id"] == item_id for item in _cart), "Item ID not found in cart"
+    assert any(item["item_id"] == item_id for item in _cart), (
+        "Item ID not found in cart"
+    )
     _cart = [item for item in _cart if item["item_id"] != item_id]
     return f"Item {item_id} removed successfully."
 

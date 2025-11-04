@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import os
 import time
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import asynccontextmanager
 from typing import AsyncIterator, Dict, List
 
 # Global observability state

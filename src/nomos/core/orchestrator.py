@@ -316,7 +316,7 @@ class Orchestrator:
                     done = False
                     # Get current node for this turn (may have changed due to routing)
                     current_node_id = self._current_node.get(session_id)
-                    
+
                     # Update allowed tools for the current node (in case we routed to a new node)
                     node_allowed_tools = None
                     if isinstance(self._agent, AgentSpec) and current_node_id:
@@ -346,9 +346,12 @@ class Orchestrator:
                                             }
                                         else:
                                             available_tool_specs = all_tools
-                                    
+
                                     msgs = eff_provider.build_decision_messages(  # type: ignore[union-attr]
-                                        self._agent, current_node_id, available_tool_specs, msgs
+                                        self._agent,
+                                        current_node_id,
+                                        available_tool_specs,
+                                        msgs,
                                     )
                                 except Exception:
                                     msgs = list(messages_base)
@@ -424,7 +427,9 @@ class Orchestrator:
                                                 session_id=session_id,
                                                 type=EventType.DECISION_COMPLETED,
                                                 data=ddata,
-                                                node_id=self._current_node.get(session_id),
+                                                node_id=self._current_node.get(
+                                                    session_id
+                                                ),
                                             )
                                         ],
                                     )
@@ -440,7 +445,9 @@ class Orchestrator:
                                         response = data.get("response", "")
                                         assistant_msg = {
                                             "role": "assistant",
-                                            "content": [{"type": "text", "data": response}],
+                                            "content": [
+                                                {"type": "text", "data": response}
+                                            ],
                                         }
                                         messages_base.append(assistant_msg)
                                         self._messages[session_id].append(assistant_msg)
@@ -464,18 +471,21 @@ class Orchestrator:
                                             )
                                             inc(EventType.ERROR_OCCURRED.value)
                                             break
-                                        
+
                                         # Add tool call message to history
                                         from nomos.core.schemas import Message
+
                                         tool_call_msg = Message.tool_call_message(
                                             tool_name, tool_kwargs
                                         ).model_dump()
                                         messages_base.append(tool_call_msg)
                                         self._messages[session_id].append(tool_call_msg)
-                                        
+
                                         # Stream tool frames
                                         ctx = {
-                                            "cancel_event": self._cancel_events[session_id],
+                                            "cancel_event": self._cancel_events[
+                                                session_id
+                                            ],
                                             "session_id": session_id,
                                             "node_id": current_node_id,
                                             "memory": ov.get("memory"),
@@ -494,11 +504,19 @@ class Orchestrator:
                                                     tool_name, tool_kwargs, ctx
                                                 ):
                                                     if (
-                                                        self._cancel_flags.get(session_id)
-                                                        or self._cancel_events[session_id].is_set()
+                                                        self._cancel_flags.get(
+                                                            session_id
+                                                        )
+                                                        or self._cancel_events[
+                                                            session_id
+                                                        ].is_set()
                                                     ):
-                                                        self._cancel_flags[session_id] = False
-                                                        self._cancel_events[session_id].clear()
+                                                        self._cancel_flags[
+                                                            session_id
+                                                        ] = False
+                                                        self._cancel_events[
+                                                            session_id
+                                                        ].clear()
                                                         break
                                                     # Convert tool frame to SessionEvent
                                                     # Map tool frame type strings to EventType enum
@@ -506,10 +524,14 @@ class Orchestrator:
                                                         "type", "tool.frame"
                                                     )
                                                     try:
-                                                        frame_type = EventType(frame_type_str)
+                                                        frame_type = EventType(
+                                                            frame_type_str
+                                                        )
                                                     except ValueError:
                                                         # Fallback for unknown types
-                                                        frame_type = EventType.ERROR_OCCURRED
+                                                        frame_type = (
+                                                            EventType.ERROR_OCCURRED
+                                                        )
 
                                                     session_event = SessionEvent(
                                                         session_id=session_id,
@@ -521,34 +543,65 @@ class Orchestrator:
                                                         },
                                                         node_id=current_node_id,
                                                     )
-                                                    await self._append(session_id, [session_event])
+                                                    await self._append(
+                                                        session_id, [session_event]
+                                                    )
                                                     inc(frame_type_str)
-                                                    if frame_type_str == "tool.completed":
-                                                        last_result = tframe.get("result")
+                                                    if (
+                                                        frame_type_str
+                                                        == "tool.completed"
+                                                    ):
+                                                        last_result = tframe.get(
+                                                            "result"
+                                                        )
                                                     elif frame_type_str == "tool.error":
                                                         # Tool execution failed - add error message
-                                                        error_msg = tframe.get("error", "Unknown error")
-                                                        from nomos.core.schemas import Message
-                                                        tool_error_msg = Message.tool_error_message(
-                                                            tool_name, error_msg
-                                                        ).model_dump()
-                                                        messages_base.append(tool_error_msg)
-                                                        self._messages[session_id].append(tool_error_msg)
+                                                        error_msg = tframe.get(
+                                                            "error", "Unknown error"
+                                                        )
+                                                        from nomos.core.schemas import (
+                                                            Message,
+                                                        )
+
+                                                        tool_error_msg = (
+                                                            Message.tool_error_message(
+                                                                tool_name, error_msg
+                                                            ).model_dump()
+                                                        )
+                                                        messages_base.append(
+                                                            tool_error_msg
+                                                        )
+                                                        self._messages[
+                                                            session_id
+                                                        ].append(tool_error_msg)
                                                         # Clear last_result so we don't add a success message
                                                         last_result = None
 
                                                 # feed tool result back into messages for next turn
                                                 if last_result is not None:
-                                                    from nomos.core.schemas import Message
-                                                    tool_output_msg = Message.tool_output_message(
-                                                        tool_name, last_result
-                                                    ).model_dump()
-                                                    messages_base.append(tool_output_msg)
-                                                    self._messages[session_id].append(tool_output_msg)
+                                                    from nomos.core.schemas import (
+                                                        Message,
+                                                    )
+
+                                                    tool_output_msg = (
+                                                        Message.tool_output_message(
+                                                            tool_name, last_result
+                                                        ).model_dump()
+                                                    )
+                                                    messages_base.append(
+                                                        tool_output_msg
+                                                    )
+                                                    self._messages[session_id].append(
+                                                        tool_output_msg
+                                                    )
                                     # Handle routing (MOVE) only on decision frame
-                                    if isinstance(self._agent, AgentSpec) and action == "MOVE":
+                                    if (
+                                        isinstance(self._agent, AgentSpec)
+                                        and action == "MOVE"
+                                    ):
                                         to_id = self._agent.route(
-                                            self._current_node.get(session_id) or "", data
+                                            self._current_node.get(session_id) or "",
+                                            data,
                                         )  # type: ignore[arg-type]
                                         if to_id:
                                             await self._append(
@@ -570,7 +623,9 @@ class Orchestrator:
                                             inc(EventType.ROUTING_APPLIED.value)
 
                                             if self._verbose:
-                                                from_node = self._current_node.get(session_id)
+                                                from_node = self._current_node.get(
+                                                    session_id
+                                                )
                                                 _console.print(
                                                     _format_routing(
                                                         from_node or "",
@@ -582,9 +637,9 @@ class Orchestrator:
                                             self._current_node[session_id] = to_id
                                     # End after one decision turn per input
                                     # End after one decision turn per input (multi-turn handled by client or future loop)
-                                    if decision_data and decision_data.get("action") in (
-                                        "RESPOND",
-                                    ):
+                                    if decision_data and decision_data.get(
+                                        "action"
+                                    ) in ("RESPOND",):
                                         done = True
                     if done:
                         break

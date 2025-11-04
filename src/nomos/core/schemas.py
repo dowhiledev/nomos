@@ -85,9 +85,9 @@ class Message(BaseModel):
         ... )
     """
 
-    role: Literal["user", "assistant", "system", "tool_call", "tool_output", "tool_error"] = Field(
-        description="Message originator role"
-    )
+    role: Literal[
+        "user", "assistant", "system", "tool_call", "tool_output", "tool_error"
+    ] = Field(description="Message originator role")
     content: Union[str, List[ContentPart]] = Field(
         description="Message body (text or content parts)"
     )

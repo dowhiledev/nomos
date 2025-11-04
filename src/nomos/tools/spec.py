@@ -16,7 +16,7 @@ rich context about available tools.
 from __future__ import annotations
 
 import inspect
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Optional
 
 from pydantic import BaseModel
@@ -69,13 +69,8 @@ class ToolSpec:
     timeout: Optional[float] = None
     """Optional execution timeout in seconds."""
 
-    permissions: Dict[str, Any] = None
+    permissions: Dict[str, Any] = field(default_factory=dict)
     """Optional ACL/permission info."""
-
-    def __post_init__(self) -> None:
-        """Ensure permissions is initialized."""
-        if self.permissions is None:
-            self.permissions = {}
 
     def get_args_schema(self) -> type[BaseModel]:
         """Get the Pydantic schema for this tool's arguments.
@@ -125,7 +120,7 @@ class ToolSpec:
         params = {}
         props = schema_dict.get("properties", {})
         required = schema_dict.get("required", [])
-        
+
         for pname, pspec in props.items():
             param_info = {
                 "type": pspec.get("type", "unknown"),
@@ -135,7 +130,7 @@ class ToolSpec:
             if pname not in required and "default" in pspec:
                 param_info["default"] = pspec["default"]
             params[pname] = param_info
-        
+
         return params
 
     def is_async(self) -> bool:
