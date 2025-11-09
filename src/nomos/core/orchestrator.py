@@ -518,9 +518,18 @@ class Orchestrator:
                                                             session_id
                                                         ].clear()
                                                         break
-                                                    # Convert tool frame to SessionEvent
+                                                    # Convert tool frame (Pydantic model) to dict for event streaming
+                                                    # Tool frames are typed models (ToolStarted, ToolCompleted, etc.)
+                                                    # so we use model_dump() rather than dict-style .get/.items.
+                                                    frame_dict = (
+                                                        tframe.model_dump()
+                                                        if hasattr(tframe, "model_dump")
+                                                        else dict(
+                                                            tframe
+                                                        )  # best-effort fallback
+                                                    )
                                                     # Map tool frame type strings to EventType enum
-                                                    frame_type_str = tframe.get(
+                                                    frame_type_str = frame_dict.get(
                                                         "type", "tool.frame"
                                                     )
                                                     try:
@@ -538,7 +547,7 @@ class Orchestrator:
                                                         type=frame_type,
                                                         data={
                                                             k: v
-                                                            for k, v in tframe.items()
+                                                            for k, v in frame_dict.items()
                                                             if k != "type"
                                                         },
                                                         node_id=current_node_id,
@@ -551,12 +560,12 @@ class Orchestrator:
                                                         frame_type_str
                                                         == "tool.completed"
                                                     ):
-                                                        last_result = tframe.get(
+                                                        last_result = frame_dict.get(
                                                             "result"
                                                         )
                                                     elif frame_type_str == "tool.error":
                                                         # Tool execution failed - add error message
-                                                        error_msg = tframe.get(
+                                                        error_msg = frame_dict.get(
                                                             "error", "Unknown error"
                                                         )
                                                         from nomos.core.schemas import (
