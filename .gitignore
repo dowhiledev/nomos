@@ -11,6 +11,7 @@ docs/next-env.d.ts
 test_generated.py
 *.sql
 *.sqlite3
+.old/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
